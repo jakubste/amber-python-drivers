@@ -18,6 +18,9 @@ class MessageHandler(object):
     def __call__(self, *args, **kwargs):
         self.__amber_pipes(*args, **kwargs)
 
+    def get_pipes(self):
+        return self.__amber_pipes
+
     @abc.abstractmethod
     def handle_data_message(self, header, message):
         pass
@@ -67,6 +70,7 @@ class AmberPipes(object):
         :return: binary string
         """
         data = self.__read_from_pipe(size)
+        # FIXME: can generate error, why?
         size = struct.unpack('!H', data)
         data = self.__read_from_pipe(size[0])
         return data
@@ -115,7 +119,7 @@ class AmberPipes(object):
             self.__logger.warning('CLIENT_DIED\'s clientID not set, ignoring.')
 
         else:
-            self.__message_handler.handle_client_died_message(header.client_ids[0])
+            self.__message_handler.handle_client_died_message(header.clientIDs[0])
 
     def __handle_ping_message(self, header, message):
         """
@@ -125,7 +129,7 @@ class AmberPipes(object):
         :param message: object of DriverMsg
         :return: nothing
         """
-        if hasattr(message, 'synNum'):
+        if message.HasField('synNum'):
             self.__logger.warning('PING\'s synNum not set, ignoring.')
 
         else:
@@ -175,4 +179,5 @@ class AmberPipes(object):
         :return: nothing
         """
         self.__pipe_out.write(binary_string)
+        self.__pipe_out.flush()
 

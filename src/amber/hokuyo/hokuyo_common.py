@@ -1,10 +1,11 @@
 import logging
 import logging.config
-import os
 import threading
 import time
 
-from amber.common import drivermsg_pb2
+import os
+
+from amber.common import drivermsg_pb2, runtime
 from amber.common.amber_pipes import MessageHandler
 from amber.hokuyo import hokuyo_pb2
 from amber.tools import config
@@ -178,49 +179,20 @@ class HokuyoController(MessageHandler):
         self.__hokuyo = Hokuyo(port)
 
         self.__hokuyo.reset()
-        # FIXME: laser on only if any client is
         self.__hokuyo.laser_on()
         self.__hokuyo.set_high_sensitive(HIGH_SENSITIVE)
         self.__hokuyo.set_motor_speed(SPEED_MOTOR)
+
+        self.__alive, self.__angles, self.__distances = True, [], []
+
+        self.__scan_thread = threading.Thread(target=self.__scanning_run)
+        runtime.add_shutdown_hook(self.terminate)
+        self.__scan_thread.start()
 
         self.__logger = logging.getLogger(LOGGER_NAME)
 
         self.__subscribers = []
         self.__subscribe_thread = None
-
-    @MessageHandler.handle_and_response
-    def __handle_get_version_info(self, received_header, received_message, response_header, response_message):
-        self.__logger.debug('Get version info')
-        data = self.__hokuyo.get_version_info()
-        version = data.split('\n')
-
-        response_message.Extensions[hokuyo_pb2.version].response = data
-        self.__set_value(response_message, version, hokuyo_pb2.version, HokuyoController.__version_fields.items())
-
-        return response_header, response_message
-
-    @MessageHandler.handle_and_response
-    def __handle_get_sensor_state(self, received_header, received_message, response_header, response_message):
-        self.__logger.debug('Get sensor state')
-        data = self.__hokuyo.get_version_info()
-        state = data.split('\n')
-
-        response_message.Extensions[hokuyo_pb2.state].response = data
-        response_message.Extensions[hokuyo_pb2.state].laser = bool(state[3][5:-2])
-        self.__set_value(response_message, state, hokuyo_pb2.state, HokuyoController.__state_fields.items())
-
-        return response_header, response_message
-
-    @MessageHandler.handle_and_response
-    def __handle_get_sensor_specs(self, received_header, received_message, response_header, response_message):
-        self.__logger.debug('Get sensor specs')
-        data = self.__hokuyo.get_sensor_specs()
-        specs = data.split('\n')
-
-        response_message.Extensions[hokuyo_pb2.specs].response = data
-        self.__set_value(response_message, specs, hokuyo_pb2.specs, HokuyoController.__sensor_specs_fields.items())
-
-        return response_header, response_message
 
     @MessageHandler.handle_and_response
     def __handle_get_single_scan(self, received_header, received_message, response_header, response_message):
@@ -231,20 +203,11 @@ class HokuyoController(MessageHandler):
         return response_header, response_message
 
     def handle_data_message(self, header, message):
-        if message.HasExtension(hokuyo_pb2.get_version_info):
-            self.__handle_get_version_info(header, message)
-
-        elif message.HasExtension(hokuyo_pb2.get_sensor_state):
-            self.__handle_get_sensor_state(header, message)
-
-        elif message.HasExtension(hokuyo_pb2.get_sensor_specs):
-            self.__handle_get_sensor_specs(header, message)
-
-        elif message.HasExtension(hokuyo_pb2.get_single_scan):
+        if message.HasExtension(hokuyo_pb2.get_single_scan):
             self.__handle_get_single_scan(header, message)
 
         else:
-            self.__logger.warning('No request in message')
+            self.__logger.warning('No request or unknown request type in message')
 
     def handle_subscribe_message(self, header, message):
         self.__logger.debug('Subscribe action')
@@ -253,7 +216,7 @@ class HokuyoController(MessageHandler):
         self.__subscribers.extend(header.clientIDs)
 
         if no_subscribers or self.__subscribe_thread is None:
-            self.__subscribe_thread = threading.Thread(target=self.__run)
+            self.__subscribe_thread = threading.Thread(target=self.__subscription_run)
             self.__subscribe_thread.start()
 
     def handle_unsubscribe_message(self, header, message):
@@ -272,29 +235,38 @@ class HokuyoController(MessageHandler):
         except ValueError:
             self.__logger.warning('Client %d does not registered as subscriber' % client_id)
 
-    def __run(self):
-        while len(self.__subscribers) > 0:
-            response_header = drivermsg_pb2.DriverHdr()
-            response_message = drivermsg_pb2.DriverMsg()
+    def __scanning_run(self):
+        while self.__alive:
+            scan = self.__hokuyo.get_single_scan()
+            self.__angles = sorted(scan.keys())
+            self.__distances = map(scan.get, self.__angles)
 
-            response_message.type = drivermsg_pb2.DriverMsg.DATA
-            response_message.ackNum = 0
+            time.sleep(0.045)
 
-            response_header.clientIDs.extend(self.__subscribers)
-            response_message = self.__fill_scan(response_message)
+    def __subscription_run(self):
+        try:
+            while self.__alive and len(self.__subscribers) > 0:
+                response_header = drivermsg_pb2.DriverHdr()
+                response_message = drivermsg_pb2.DriverMsg()
 
-            self.get_pipes().write_header_and_message_to_pipe(response_header, response_message)
+                response_message.type = drivermsg_pb2.DriverMsg.DATA
+                response_message.ackNum = 0
 
-            # It must be less than 0.1s
-            time.sleep(0.095)
+                response_header.clientIDs.extend(self.__subscribers)
+                response_message = self.__fill_scan(response_message)
+
+                self.get_pipes().write_header_and_message_to_pipe(response_header, response_message)
+
+                # It must be less than 0.1s
+                time.sleep(0.095)
+        except IOError:
+            self.__alive = False
 
     def __fill_scan(self, response_message):
-        scan = self.__hokuyo.get_single_scan()
-
-        angles = sorted(scan.keys())
-        distances = map(scan.get, angles)
-
-        response_message.Extensions[hokuyo_pb2.scan].angles.extend(angles)
-        response_message.Extensions[hokuyo_pb2.scan].distances.extend(distances)
+        response_message.Extensions[hokuyo_pb2.scan].angles.extend(self.__angles)
+        response_message.Extensions[hokuyo_pb2.scan].distances.extend(self.__distances)
 
         return response_message
+
+    def terminate(self):
+        self.__alive = False

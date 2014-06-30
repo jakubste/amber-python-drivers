@@ -60,6 +60,9 @@ class Hokuyo(object):
         self.__write_command(code)
         return self.__get_result(lines)
 
+    def close(self):
+        self.__port.close()
+
     def laser_on(self):
         self.__port.write('BM\n')
         return self.__port.read(9)
@@ -124,56 +127,10 @@ class Hokuyo(object):
         index = 0
         while number_of_scans == 0 or index > 0:
             index -= 1
-            yield self.__get_scan(start_step, stop_step, cluster_count)
+            yield self.__get_scan(start_step, stop_step, cluster_count, True)
 
 
 class HokuyoController(MessageHandler):
-    __version_fields = {'vendor': 2,
-                        'product': 3,
-                        'firmware': 4,
-                        'protocol': 5,
-                        'serial': 6}
-
-    __state_fields = {'model': 2,
-                      'motor_speed': 4,
-                      'measure_mode': 5,
-                      'bit_rate': 6,
-                      'time': 7,
-                      'diagnostic': 8}
-
-    __sensor_specs_fields = {'model': 2,
-                             'distance_minimum': 3,
-                             'distance_maximum': 4,
-                             'area_resolution': 5,
-                             'area_minimum': 6,
-                             'area_maximum': 7,
-                             'area_front': 8,
-                             'motor_speed': 9}
-
-    @staticmethod
-    def __get_value(value):
-        try:
-            value = value[5:-2]
-        except IndexError:
-            pass
-
-        try:
-            value = int(value)
-        except ValueError:
-            pass
-
-        return value
-
-    def __set_value(self, response_message, what, where, which):
-        for field_name, field_num in which:
-            try:
-                setattr(response_message.Extensions[where], field_name,
-                        HokuyoController.__get_value(what[field_num]))
-            except IndexError as e:
-                self.__logger.warn('Index out of list: %s' % str(e))
-            except TypeError as e:
-                self.__logger.warn('Probably saving int as string: %s' % str(e))
-
     def __init__(self, pipe_in, pipe_out, port):
         super(HokuyoController, self).__init__(pipe_in, pipe_out)
         self.__hokuyo = Hokuyo(port)
@@ -241,8 +198,6 @@ class HokuyoController(MessageHandler):
             self.__angles = sorted(scan.keys())
             self.__distances = map(scan.get, self.__angles)
 
-            time.sleep(0.045)
-
     def __subscription_run(self):
         try:
             while self.__alive and len(self.__subscribers) > 0:
@@ -270,3 +225,4 @@ class HokuyoController(MessageHandler):
 
     def terminate(self):
         self.__alive = False
+        self.__hokuyo.close()

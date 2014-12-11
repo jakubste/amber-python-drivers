@@ -3,13 +3,12 @@ import logging.config
 import threading
 import sys
 import traceback
-import time
 
 import os
-from amber.common import drivermsg_pb2, runtime
-from amber.common.amber_pipes import MessageHandler
-from amber.hokuyo import hokuyo_pb2
-from amber.tools import config
+from amberdriver.common import drivermsg_pb2, runtime
+from amberdriver.common.amber_pipes import MessageHandler
+from amberdriver.hokuyo import hokuyo_pb2
+from amberdriver.tools import config
 
 
 __author__ = 'paoolo'

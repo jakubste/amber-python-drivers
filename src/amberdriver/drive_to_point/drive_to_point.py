@@ -4,14 +4,14 @@ import time
 import math
 import sys
 
-from amber.client.common import amber_client
-from amber.client.location import location
-from amber.client.roboclaw import roboclaw
+from amberclient.common import amber_client
+from amberclient.location import location
+from amberclient.roboclaw import roboclaw
 import os
 
-from amber.driver.common import runtime
-from amber.driver.common.amber_pipes import MessageHandler
-from amber.driver.drive_to_point import drive_to_point_pb2
+from amberdriver.common import runtime
+from amberdriver.common.amber_pipes import MessageHandler
+from amberdriver.drive_to_point import drive_to_point_pb2
 
 
 __author__ = 'paoolo'

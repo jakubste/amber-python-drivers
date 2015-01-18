@@ -1,6 +1,7 @@
 import mock
 
 from amberdriver.drive_to_point import drive_to_point_pb2
+from amberdriver.drive_to_point.drive_to_point import DriveToPoint
 from amberdriver.drive_to_point.drive_to_point_controller import DriveToPointController
 
 
@@ -226,3 +227,96 @@ class TerminateTestCase(DriveToPointControllerTestCase):
     def runTest(self):
         self.controller.terminate()
         self.mocked_drive_to_point.terminate.assert_called_once_with()
+
+
+class DriveToPointTestCase(unittest.TestCase):
+    def setUp(self):
+        self.mocked_roboclaw_proxy = mock.Mock()
+        self.mocked_location_proxy = mock.Mock()
+        self.drive_to_point = DriveToPoint(self.mocked_roboclaw_proxy, self.mocked_location_proxy)
+
+
+class TargetAndLocationTestCase(DriveToPointTestCase):
+    def setUp(self):
+        super(TargetAndLocationTestCase, self).setUp()
+        self.mocked_lock = mock.Mock()
+        self.mocked_next_target = mock.Mock()
+        self.mocked_next_targets = [self.mocked_next_target, ]
+        self.mocked_visited_target = mock.Mock()
+        self.mocked_visited_targets = [self.mocked_visited_target, ]
+        self.mocked_location = mock.Mock(spec=tuple)
+        self.drive_to_point._DriveToPoint__targets_and_location_lock = self.mocked_lock
+        self.drive_to_point._DriveToPoint__next_targets = self.mocked_next_targets
+        self.drive_to_point._DriveToPoint__visited_targets = self.mocked_visited_targets
+        self.drive_to_point._DriveToPoint__current_location = self.mocked_location
+
+
+class SetTargetsTestCase(TargetAndLocationTestCase):
+    def runTest(self):
+        targets = mock.Mock()
+        self.drive_to_point.set_targets(targets)
+        self.assertEqual(self.drive_to_point._DriveToPoint__next_targets, targets)
+        self.assertEqual(self.drive_to_point._DriveToPoint__visited_targets, [])
+        self.mocked_lock.acquire.assert_called_once_with()
+        self.mocked_lock.release.assert_called_once_with()
+
+
+class GetNextTargetsAndLocationTestCase(TargetAndLocationTestCase):
+    def runTest(self):
+        targets, location = self.drive_to_point.get_next_targets_and_location()
+        self.assertTrue(self.mocked_next_target in targets)
+        self.assertEqual(self.mocked_location, location)
+        self.mocked_lock.acquire.assert_called_once_with()
+        self.mocked_lock.release.assert_called_once_with()
+
+
+class GetNextTargetAndLocationTestCase(TargetAndLocationTestCase):
+    def runTest(self):
+        target, location = self.drive_to_point.get_next_target_and_location()
+        self.assertEqual(self.mocked_next_target, target)
+        self.assertEqual(self.mocked_location, location)
+        self.mocked_lock.acquire.assert_called_once_with()
+        self.mocked_lock.release.assert_called_once_with()
+
+
+class GetVisitedTargetsAndLocationTestCase(TargetAndLocationTestCase):
+    def runTest(self):
+        targets, location = self.drive_to_point.get_visited_targets_and_location()
+        self.assertTrue(self.mocked_visited_target in targets)
+        self.assertEqual(self.mocked_location, location)
+        self.mocked_lock.acquire.assert_called_once_with()
+        self.mocked_lock.release.assert_called_once_with()
+
+
+class GetVisitedTargetAndLocationTestCase(TargetAndLocationTestCase):
+    def runTest(self):
+        target, location = self.drive_to_point.get_visited_target_and_location()
+        self.assertEqual(self.mocked_visited_target, target)
+        self.assertEqual(self.mocked_location, location)
+        self.mocked_lock.acquire.assert_called_once_with()
+        self.mocked_lock.release.assert_called_once_with()
+
+
+class GetNextTargetTestCase(TargetAndLocationTestCase):
+    def runTest(self):
+        next_target = self.drive_to_point._DriveToPoint__get_next_target()
+        self.assertEqual(self.mocked_next_target, next_target)
+        self.mocked_lock.acquire.assert_called_once_with()
+        self.mocked_lock.release.assert_called_once_with()
+
+
+class SetCurrentLocationTestCase(TargetAndLocationTestCase):
+    def runTest(self):
+        location = mock.Mock()
+        self.drive_to_point._DriveToPoint__set_current_location(location)
+        self.assertEqual(location, self.drive_to_point._DriveToPoint__current_location)
+        self.mocked_lock.acquire.assert_called_once_with()
+        self.mocked_lock.release.assert_called_once_with()
+
+
+class AddTargetToVisitedTestCase(TargetAndLocationTestCase):
+    def runTest(self):
+        self.drive_to_point._DriveToPoint__add_target_to_visited(self.mocked_next_target)
+        self.assertTrue(self.mocked_next_target in self.mocked_visited_targets)
+        self.mocked_lock.acquire.assert_called_once_with()
+        self.mocked_lock.release.assert_called_once_with()

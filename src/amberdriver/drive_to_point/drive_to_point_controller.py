@@ -1,7 +1,11 @@
 import logging
 import logging.config
 import sys
+import threading
 
+from amberclient.common.amber_client import AmberClient
+from amberclient.location.location import LocationProxy
+from amberclient.roboclaw.roboclaw import RoboclawProxy
 import os
 
 from amberdriver.common import runtime
@@ -21,9 +25,9 @@ LOGGER_NAME = 'DriveToPointController'
 
 
 class DriveToPointController(MessageHandler):
-    def __init__(self, pipe_in, pipe_out, dtd=None):
+    def __init__(self, pipe_in, pipe_out, drive_to_point):
         super(DriveToPointController, self).__init__(pipe_in, pipe_out)
-        self.__drive_to_point = DriveToPoint() if dtd is None else dtd
+        self.__drive_to_point = drive_to_point
 
         self.__logger = logging.getLogger(LOGGER_NAME)
 
@@ -151,5 +155,15 @@ class DriveToPointController(MessageHandler):
 
 
 if __name__ == '__main__':
-    controller = DriveToPointController(sys.stdin, sys.stdout)
+    client_for_roboclaw = AmberClient('127.0.0.1', name="roboclaw")
+    client_for_location = AmberClient('127.0.0.1', name="location")
+
+    roboclaw_proxy = RoboclawProxy(client_for_roboclaw, 0)
+    location_proxy = LocationProxy(client_for_location, 0)
+
+    drive_to_point = DriveToPoint(roboclaw_proxy, location_proxy)
+    driving_thread = threading.Thread(target=drive_to_point.driving_loop, name="driving-thread")
+    driving_thread.start()
+
+    controller = DriveToPointController(sys.stdin, sys.stdout, drive_to_point)
     controller()

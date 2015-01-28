@@ -115,6 +115,7 @@ class DriveToPoint(object):
             time.sleep(sleep_interval)
 
     def driving_loop(self):
+        # FIXME(paoolo) it blocks!
         while self.__is_active:
             self.__wait_for_new_targets()
             try:
@@ -129,8 +130,8 @@ class DriveToPoint(object):
     def __wait_for_new_targets(self):
         self.__targets_lock.acquire()
         try:
-            while not len(self.__next_targets) > 0:
-                self.__targets_lock.wait()
+            while not len(self.__next_targets) > 0 and self.__is_active:
+                self.__targets_lock.wait(0.5)
         finally:
             self.__targets_lock.release()
 

@@ -119,8 +119,9 @@ class Hokuyo(object):
 
                 return result
             except BaseException:
-                sys.stderr.write('RESULT: "%s"' % result)
+                sys.stderr.write('RESULT: "%s"\n' % result)
                 traceback.print_exc()
+                traceback.print_stack()
                 self.__offset()
         finally:
             self.__port_lock.release()
@@ -152,8 +153,9 @@ class Hokuyo(object):
 
                 return result
             except BaseException:
-                sys.stderr.write('RESULT: "%s"' % result)
+                sys.stderr.write('RESULT: "%s"\n' % result)
                 traceback.print_exc()
+                traceback.print_stack()
                 self.__offset()
         finally:
             self.__port_lock.release()
@@ -272,6 +274,10 @@ class Hokuyo(object):
 
                 scan = self.__get_and_parse_scan(cluster_count, start_step, stop_step)
                 yield scan
+
+        except GeneratorExit:
+            sys.stderr.write('Multi scan interrupted!\n')
+            self.__offset()
 
         except BaseException:
             traceback.print_exc()

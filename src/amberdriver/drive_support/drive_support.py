@@ -60,22 +60,13 @@ class DriveSupport(object):
 
     def terminate(self):
         self.__is_active = False
-
         self.__hokuyo_proxy.unsubscribe(self.__hokuyo_listener)
-
-        self.__roboclaw_lock.acquire()
-        try:
-            self.stop()
-            self.__roboclaw_front.close()
-            self.__roboclaw_rear.close()
-        finally:
-            self.__roboclaw_lock.release()
 
     def stop(self):
         self.__roboclaw_lock.acquire()
         try:
-            self.__roboclaw_front.set_mixed_duty(0, 0)
-            self.__roboclaw_rear.set_mixed_duty(0, 0)
+            self.__roboclaw_front.drive_mixed_with_signed_duty_cycle(0, 0)
+            self.__roboclaw_rear.drive_mixed_with_signed_duty_cycle(0, 0)
         finally:
             self.__roboclaw_lock.release()
 
@@ -91,10 +82,10 @@ class DriveSupport(object):
     def get_measured_speeds(self):
         self.__roboclaw_lock.acquire()
         try:
-            front_left = self.__roboclaw_front.read_m1_speed()
-            front_right = self.__roboclaw_front.read_m2_speed()
-            rear_left = self.__roboclaw_rear.read_m1_speed()
-            rear_right = self.__roboclaw_rear.read_m2_speed()
+            front_left = self.__roboclaw_front.read_speed_m1()
+            front_right = self.__roboclaw_front.read_speed_m2()
+            rear_left = self.__roboclaw_rear.read_speed_m1()
+            rear_right = self.__roboclaw_rear.read_speed_m2()
             return front_left, front_right, rear_left, rear_right
         finally:
             self.__roboclaw_lock.release()
@@ -110,13 +101,13 @@ class DriveSupport(object):
             is_any_non_zero = reduce(lambda acc, speed: acc or speed < 0 or speed > 0, speeds_values, False)
 
             if is_any_non_zero or current_speeds_timestamp > last_speeds_timestamp:
-                speeds_values = DriveSupport.__drive_support(speeds, self.__scan, self.__sensor_data)
+                speeds_values = DriveSupport.__drive_support(speeds, self.__scan)
                 (front_left, front_right, rear_left, rear_right) = speeds_values
 
                 self.__roboclaw_lock.acquire()
                 try:
-                    self.__roboclaw_front.set_mixed_duty(front_left, front_right)
-                    self.__roboclaw_rear.set_mixed_duty(rear_left, rear_right)
+                    self.__roboclaw_front.drive_mixed_with_signed_duty_cycle(front_left, front_right)
+                    self.__roboclaw_rear.drive_mixed_with_signed_duty_cycle(rear_left, rear_right)
                 finally:
                     self.__roboclaw_lock.release()
 
@@ -129,7 +120,7 @@ class DriveSupport(object):
             time.sleep(sleep_interval)
 
     @staticmethod
-    def __drive_support(speeds, scan, sensor_data):
+    def __drive_support(speeds, scan):
         current_speeds_timestamp = speeds.get_timestamp()
         speeds_values = speeds.get_speeds()
 

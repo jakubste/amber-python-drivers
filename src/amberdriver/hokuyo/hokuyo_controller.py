@@ -3,6 +3,7 @@ import logging.config
 import sys
 import threading
 import traceback
+import time
 
 import os
 import serial
@@ -44,7 +45,7 @@ class HokuyoController(MessageHandler):
     @MessageHandler.handle_and_response
     def __handle_get_single_scan(self, _received_header, _received_message, response_header, response_message):
         self.__logger.debug('Get single scan')
-        angles, distances, timestamp = self.__hokuyo.get_single_scan()
+        angles, distances, timestamp = self.__hokuyo.get_scan()
         response_message = HokuyoController.__fill_scan(response_message, angles, distances, timestamp)
         return response_header, response_message
 
@@ -70,6 +71,12 @@ class HokuyoController(MessageHandler):
         response_message.Extensions[hokuyo_pb2.scan].distances.extend(distances)
         response_message.Extensions[hokuyo_pb2.timestamp] = timestamp
         return response_message
+
+
+def sending_loop(_controller):
+    while _controller.is_alive():
+        _controller.send_subscribers_message()
+        time.sleep(0.1)
 
 
 if __name__ == '__main__':
@@ -102,6 +109,10 @@ if __name__ == '__main__':
 
         controller = HokuyoController(sys.stdin, sys.stdout, hokuyo)
         hokuyo.set_controller(controller)
+
+        sending_thread = threading.Thread(target=sending_loop, args=(controller,))
+        sending_thread.start()
+
         controller.run()
 
     except BaseException as e:

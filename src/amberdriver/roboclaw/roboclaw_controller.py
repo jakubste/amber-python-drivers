@@ -3,6 +3,7 @@ import logging.config
 import sys
 import threading
 import traceback
+import math
 
 import serial
 import os
@@ -22,16 +23,20 @@ config.add_config_ini('%s/roboclaw.ini' % pwd)
 
 LOGGER_NAME = 'RoboclawController'
 
+SERIAL_PORT = config.ROBOCLAW_SERIAL_PORT
+BAUD_RATE = config.ROBOCLAW_BAUD_RATE
+
+REAR_RC_ADDRESS = int(config.ROBOCLAW_REAR_RC_ADDRESS)
+FRONT_RC_ADDRESS = int(config.ROBOCLAW_FRONT_RC_ADDRESS)
+
 MOTORS_MAX_QPPS = int(config.ROBOCLAW_MAX_QPPS)
 MOTORS_P_CONST = int(config.ROBOCLAW_P)
 MOTORS_I_CONST = int(config.ROBOCLAW_I)
 MOTORS_D_CONST = int(config.ROBOCLAW_D)
 
-REAR_RC_ADDRESS = int(config.ROBOCLAW_REAR_RC_ADDRESS)
-FRONT_RC_ADDRESS = int(config.ROBOCLAW_FRONT_RC_ADDRESS)
+WHEEL_RADIUS = float(config.ROBOCLAW_WHEEL_RADIUS)
+PULSES_PER_REVOLUTION = float(config.ROBOCLAW_PULSES_PER_REVOLUTION)
 
-SERIAL_PORT = config.ROBOCLAW_SERIAL_PORT
-BAUD_RATE = config.ROBOCLAW_BAUD_RATE
 TIMEOUT = 0.3
 
 
@@ -58,10 +63,10 @@ class RoboclawController(MessageHandler):
         front_left, front_right, rear_left, rear_right = self.__driver.get_measured_speeds()
 
         current_speed = response_message.Extensions[roboclaw_pb2.currentSpeed]
-        current_speed.frontLeftSpeed = int(front_left[0])
-        current_speed.frontRightSpeed = int(front_right[0])
-        current_speed.rearLeftSpeed = int(rear_left[0])
-        current_speed.rearRightSpeed = int(rear_right[0])
+        current_speed.frontLeftSpeed = int(front_left)
+        current_speed.frontRightSpeed = int(front_right)
+        current_speed.rearLeftSpeed = int(rear_left)
+        current_speed.rearRightSpeed = int(rear_right)
 
         return response_header, response_message
 
@@ -86,6 +91,15 @@ class RoboclawController(MessageHandler):
         self.__driver.stop()
 
 
+def to_mmps(val):
+    return int(val * WHEEL_RADIUS * math.pi * 2.0 / PULSES_PER_REVOLUTION)
+
+
+def to_qpps(val):
+    rps = val / (WHEEL_RADIUS * math.pi * 2.0)
+    return int(rps * PULSES_PER_REVOLUTION)
+
+
 class RoboclawDriver(object):
     def __init__(self, front, rear):
         self.__front, self.__rear = front, rear
@@ -94,15 +108,20 @@ class RoboclawDriver(object):
     def get_measured_speeds(self):
         self.__roboclaw_lock.acquire()
         try:
-            front_left = self.__front.read_speed_m1()
-            front_right = self.__front.read_speed_m2()
-            rear_left = self.__rear.read_speed_m1()
-            rear_right = self.__rear.read_speed_m2()
+            front_left = to_mmps(self.__front.read_speed_m1()[0])
+            front_right = to_mmps(self.__front.read_speed_m2()[0])
+            rear_left = to_mmps(self.__rear.read_speed_m1()[0])
+            rear_right = to_mmps(self.__rear.read_speed_m2()[0])
             return front_left, front_right, rear_left, rear_right
         finally:
             self.__roboclaw_lock.release()
 
     def set_speeds(self, front_left, front_right, rear_left, rear_right):
+        front_left = to_qpps(front_left)
+        front_right = to_qpps(front_right)
+        rear_left = to_qpps(rear_left)
+        rear_right = to_qpps(rear_right)
+
         self.__roboclaw_lock.acquire()
         try:
             self.__front.drive_mixed_with_signed_duty_cycle(front_left, front_right)

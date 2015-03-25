@@ -8,6 +8,7 @@ from amberclient.common.listener import Listener
 from ambercommon.common import runtime
 
 from amberdriver.drive_support import drive_support_logic
+from amberdriver.roboclaw import roboclaw_controller
 from amberdriver.tools import config
 
 
@@ -79,10 +80,10 @@ class DriveSupport(object):
     def get_measured_speeds(self):
         self.__roboclaw_lock.acquire()
         try:
-            front_left = self.__roboclaw_front.read_speed_m1()
-            front_right = self.__roboclaw_front.read_speed_m2()
-            rear_left = self.__roboclaw_rear.read_speed_m1()
-            rear_right = self.__roboclaw_rear.read_speed_m2()
+            front_left = roboclaw_controller.to_mmps(self.__roboclaw_front.read_speed_m1()[0])
+            front_right = roboclaw_controller.to_mmps(self.__roboclaw_front.read_speed_m2()[0])
+            rear_left = roboclaw_controller.to_mmps(self.__roboclaw_rear.read_speed_m1()[0])
+            rear_right = roboclaw_controller.to_mmps(self.__roboclaw_rear.read_speed_m2()[0])
             return front_left, front_right, rear_left, rear_right
         finally:
             self.__roboclaw_lock.release()
@@ -103,18 +104,21 @@ class DriveSupport(object):
 
     @staticmethod
     def __drive_support(speeds, scan):
+        if scan is None:
+            return 0, 0, 0, 0
+
         current_speeds_timestamp = speeds.get_timestamp()
         speeds_values = speeds.get_speeds()
 
         current_scan_timestamp = scan.get_timestamp()
-        scan_values = scan.get_scan()
+        scan_points = scan.get_points()
 
         (front_left, front_right, rear_left, rear_right) = speeds_values
 
         left = sum([front_left, rear_left]) / 2.0
         right = sum([front_right, rear_right]) / 2.0
 
-        left, right = drive_support_logic.limit_due_to_distance(left, right, scan_values)
+        left, right = drive_support_logic.limit_due_to_distance(left, right, scan_points)
 
         current_timestamp = time.time()
         trust_level = drive_support_logic.scan_trust(current_scan_timestamp, current_timestamp) * \

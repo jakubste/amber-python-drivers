@@ -1,6 +1,5 @@
 import logging
 import logging.config
-import threading
 import time
 
 import os
@@ -8,7 +7,6 @@ from amberclient.common.listener import Listener
 from ambercommon.common import runtime
 
 from amberdriver.drive_support import drive_support_logic
-from amberdriver.roboclaw import roboclaw_controller
 from amberdriver.tools import config
 
 
@@ -41,12 +39,11 @@ class Speeds(object):
 
 
 class DriveSupport(object):
-    def __init__(self, roboclaw_front, roboclaw_rear, hokuyo_proxy):
+    def __init__(self, roboclaw_driver, hokuyo_proxy):
         self.__scan = None
         self.__speeds = Speeds((0, 0, 0, 0), 0.0)
 
-        self.__roboclaw_front, self.__roboclaw_rear = roboclaw_front, roboclaw_rear
-        self.__roboclaw_lock = threading.RLock()
+        self.__roboclaw_driver = roboclaw_driver
 
         self.__is_active = True
 
@@ -64,12 +61,7 @@ class DriveSupport(object):
         self.__hokuyo_proxy.unsubscribe(self.__hokuyo_listener)
 
     def stop(self):
-        self.__roboclaw_lock.acquire()
-        try:
-            self.__roboclaw_front.drive_mixed_with_signed_speed(0, 0)
-            self.__roboclaw_rear.drive_mixed_with_signed_speed(0, 0)
-        finally:
-            self.__roboclaw_lock.release()
+        self.__roboclaw_driver.stop()
 
     def set_scan(self, scan):
         self.__scan = scan
@@ -78,34 +70,14 @@ class DriveSupport(object):
         self.__speeds = Speeds((front_left, front_right, rear_left, rear_right), time.time())
 
     def get_measured_speeds(self):
-        self.__roboclaw_lock.acquire()
-        try:
-            front_left = roboclaw_controller.to_mmps(self.__roboclaw_front.read_speed_m1()[0])
-            front_right = roboclaw_controller.to_mmps(self.__roboclaw_front.read_speed_m2()[0])
-            rear_left = roboclaw_controller.to_mmps(self.__roboclaw_rear.read_speed_m1()[0])
-            rear_right = roboclaw_controller.to_mmps(self.__roboclaw_rear.read_speed_m2()[0])
-            return front_left, front_right, rear_left, rear_right
-        finally:
-            self.__roboclaw_lock.release()
+        return self.__roboclaw_driver.get_measured_speeds()
 
     def driving_loop(self):
         while self.__is_active:
             speeds_values = DriveSupport.__drive_support(self.__speeds, self.__scan)
             (front_left, front_right, rear_left, rear_right) = speeds_values
-
-            front_left = roboclaw_controller.to_qpps(front_left)
-            front_right = roboclaw_controller.to_qpps(front_right)
-            rear_left = roboclaw_controller.to_qpps(rear_left)
-            rear_right = roboclaw_controller.to_qpps(rear_right)
-
-            self.__roboclaw_lock.acquire()
-            try:
-                self.__roboclaw_front.drive_mixed_with_signed_speed(front_left, front_right)
-                self.__roboclaw_rear.drive_mixed_with_signed_speed(rear_left, rear_right)
-            finally:
-                self.__roboclaw_lock.release()
-
-            time.sleep(0.1)
+            self.__roboclaw_driver.set_speeds(front_left, front_right, rear_left, rear_right)
+            time.sleep(0.05)
 
     @staticmethod
     def __drive_support(speeds, scan):
@@ -120,18 +92,16 @@ class DriveSupport(object):
 
         (front_left, front_right, rear_left, rear_right) = speeds_values
 
-        left = sum([front_left, rear_left]) / 2.0
-        right = sum([front_right, rear_right]) / 2.0
-
-        left, right = drive_support_logic.limit_due_to_distance(left, right, scan_points)
+        front_left, front_left = drive_support_logic.limit_due_to_distance(front_left, front_left, scan_points)
+        rear_left, rear_left = drive_support_logic.limit_due_to_distance(rear_left, rear_left, scan_points)
 
         current_timestamp = time.time()
         trust_level = drive_support_logic.scan_trust(current_scan_timestamp, current_timestamp) * \
                       drive_support_logic.command_trust(current_speeds_timestamp, current_timestamp)
 
-        left *= trust_level
-        right *= trust_level
+        front_left *= trust_level
+        rear_left *= trust_level
+        front_right *= trust_level
+        rear_right *= trust_level
 
-        left, right = int(left), int(right)
-
-        return left, right, left, right
+        return int(front_left), int(front_right), int(rear_left), int(rear_right)

@@ -175,6 +175,7 @@ class Hokuyo(object):
     def terminate(self):
         self.reset()
 
+        self.__scanning_allowed = False
         self.__is_active = False
         self.__port_lock.acquire()
         try:
@@ -277,7 +278,7 @@ class Hokuyo(object):
             assert result[-2:] == '\n\n'
 
             index = number_of_scans
-            while number_of_scans == 0 or index > 0:
+            while self.__scanning_allowed and (number_of_scans == 0 or index > 0):
                 index -= 1
 
                 try:

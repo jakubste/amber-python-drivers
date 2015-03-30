@@ -4,6 +4,7 @@ import time
 
 import os
 from amberclient.common.listener import Listener
+
 from ambercommon.common import runtime
 
 from amberdriver.drive_support import drive_support_logic
@@ -73,13 +74,10 @@ class DriveSupport(object):
         return self.__roboclaw_driver.get_measured_speeds()
 
     def driving_loop(self):
-        last_speeds = (0, 0, 0, 0)
         while self.__is_active:
             current_speeds = DriveSupport.__drive_support(self.__speeds, self.__scan)
-            if reduce(lambda result, speeds: abs(speeds[0] - speeds[1]) > 10 or result,
-                      zip(current_speeds, last_speeds), False):
-                (front_left, front_right, rear_left, rear_right) = current_speeds
-                self.__roboclaw_driver.set_speeds(front_left, front_right, rear_left, rear_right)
+            (front_left, front_right, rear_left, rear_right) = current_speeds
+            self.__roboclaw_driver.set_speeds(front_left, front_right, rear_left, rear_right)
             time.sleep(0.05)
 
     @staticmethod

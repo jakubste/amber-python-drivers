@@ -210,7 +210,7 @@ class RoboclawDriver(object):
         self.__roboclaw_lock.acquire()
         try:
             current_time = time.time()
-            if self.__last_reset_time < current_time - 5.0:
+            if self.__last_reset_time < current_time - RESET_IDLE_TIMEOUT / 10000.0 * 8.0:
                 self.__last_reset_time = current_time
                 self.__reset_gpio.write('1')
                 self.__reset_gpio.flush()
@@ -317,6 +317,7 @@ class RoboclawDriver(object):
                         return
                     elif front_error_status < 0 or rear_error_status < 0:
                         self.__logger.warn('Bad feelings: error status(es) less than zero. It looks that CRC is wrong.')
+                        self.__reset_and_wait()
                     else:
                         self.__reset_and_wait()
 

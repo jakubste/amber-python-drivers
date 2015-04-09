@@ -4,10 +4,11 @@ import sys
 import threading
 import traceback
 
-from amberclient.hokuyo.hokuyo import HokuyoProxy
 import os
+from amberclient.hokuyo.hokuyo import HokuyoProxy
 from amberclient.common.amber_client import AmberClient
 from amberclient.location.location import LocationProxy
+
 from amberclient.roboclaw.roboclaw import RoboclawProxy
 
 from amberdriver.common.message_handler import MessageHandler
@@ -23,7 +24,7 @@ pwd = os.path.dirname(os.path.abspath(__file__))
 logging.config.fileConfig('%s/drive_to_point.ini' % pwd)
 config.add_config_ini('%s/drive_to_point.ini' % pwd)
 
-LOGGER_NAME = 'DriveToPointController'
+LOGGER_NAME = 'DriveToPoint'
 
 
 class DriveToPointController(MessageHandler):

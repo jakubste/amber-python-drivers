@@ -8,6 +8,7 @@ import time
 
 import serial
 import os
+
 from ambercommon.common import runtime
 
 from amberdriver.common.message_handler import MessageHandler
@@ -23,7 +24,7 @@ pwd = os.path.dirname(os.path.abspath(__file__))
 logging.config.fileConfig('%s/roboclaw.ini' % pwd)
 config.add_config_ini('%s/roboclaw.ini' % pwd)
 
-LOGGER_NAME = 'RoboclawController'
+LOGGER_NAME = 'Roboclaw'
 
 SERIAL_PORT = str(config.ROBOCLAW_SERIAL_PORT)
 BAUD_RATE = int(config.ROBOCLAW_BAUD_RATE)
@@ -309,6 +310,8 @@ class RoboclawDriver(object):
                         self.__led2_gpio.flush()
                         self.__battery_low = True
                         return
+                    else:
+                        self.__reset_and_wait()
 
     def __read_temperature(self):
         self.__roboclaw_lock.acquire()

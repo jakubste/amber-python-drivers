@@ -21,12 +21,15 @@ pwd = os.path.dirname(os.path.abspath(__file__))
 logging.config.fileConfig('%s/hokuyo.ini' % pwd)
 config.add_config_ini('%s/hokuyo.ini' % pwd)
 
-LOGGER_NAME = 'HokuyoController'
+LOGGER_NAME = 'Hokuyo'
+
+SERIAL_PORT = config.HOKUYO_SERIAL_PORT
+BAUD_RATE = config.HOKUYO_BAUD_RATE
+
 ENABLE_MULTI_SCANNING = config.HOKUYO_ENABLE_MULTI_SCANNING == 'True'
 HIGH_SENSITIVE = config.HOKUYO_HIGH_SENSITIVE_ENABLE == 'True'
 SPEED_MOTOR = int(config.HOKUYO_SPEED_MOTOR)
-SERIAL_PORT = config.HOKUYO_SERIAL_PORT
-BAUD_RATE = config.HOKUYO_BAUD_RATE
+
 TIMEOUT = 0.3
 
 

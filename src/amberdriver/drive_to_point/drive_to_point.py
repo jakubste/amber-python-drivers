@@ -6,11 +6,12 @@ import math
 import traceback
 
 import os
+
 from ambercommon.common import runtime
+
 from amberclient.common.listener import Listener
 
 from amberdriver.drive_support import drive_support_logic
-
 from amberdriver.tools import config, bound_sleep_interval
 
 
@@ -21,6 +22,9 @@ logging.config.fileConfig('%s/drive_to_point.ini' % pwd)
 config.add_config_ini('%s/drive_to_point.ini' % pwd)
 
 LOGGER_NAME = 'DriveToPoint'
+
+MAX_SPEED = int(config.DRIVE_TO_POINT_MAX_SPEED)
+DRIVING_ALPHA = float(config.DRIVE_TO_POINT_DRIVING_ALPHA)
 
 
 def compute_sleep_interval(current_timestamp, last_timestamp, sleep_interval,
@@ -45,8 +49,6 @@ class ScanHandler(Listener):
 
 
 class DriveToPoint(object):
-    MAX_SPEED = 300
-    DRIVING_ALPHA = 3.0  # cut at 60st
     TIMESTAMP_FIELD = 4
 
     def __init__(self, driver_proxy, location_proxy, hokuyo_proxy):
@@ -240,19 +242,19 @@ class DriveToPoint(object):
 
         if abs(drive_angle) < math.pi / 18:  # 10st
             # drive normal
-            left, right = DriveToPoint.MAX_SPEED, DriveToPoint.MAX_SPEED
+            left, right = MAX_SPEED, MAX_SPEED
 
-        elif abs(drive_angle) > math.pi / 3:  # 60st
+        elif abs(drive_angle) > math.pi / DRIVING_ALPHA:
             # rotate in place
-            left = -DriveToPoint.MAX_SPEED
-            right = DriveToPoint.MAX_SPEED
+            left = -MAX_SPEED
+            right = MAX_SPEED
             if drive_angle < 0:
                 left, right = right, left
 
         else:
             # drive on turn
-            left = DriveToPoint.MAX_SPEED - DriveToPoint.compute_change(drive_angle)
-            right = DriveToPoint.MAX_SPEED + DriveToPoint.compute_change(drive_angle)
+            left = MAX_SPEED - DriveToPoint.compute_change(drive_angle)
+            right = MAX_SPEED + DriveToPoint.compute_change(drive_angle)
 
         if location_trust < 0.8:
             # control situation
@@ -279,4 +281,4 @@ class DriveToPoint(object):
 
     @staticmethod
     def compute_change(drive_angle):
-        return DriveToPoint.DRIVING_ALPHA * drive_angle / math.pi * DriveToPoint.MAX_SPEED
+        return DRIVING_ALPHA * drive_angle / math.pi * MAX_SPEED

@@ -6,11 +6,11 @@ import math
 import traceback
 
 import os
+
 from ambercommon.common import runtime
 
 from amberclient.common.listener import Listener
 
-from amberdriver.drive_support import drive_support_logic
 from amberdriver.tools import config, bound_sleep_interval
 
 
@@ -177,7 +177,7 @@ class DriveToPoint(object):
         while not DriveToPoint.target_reached(location, target) and self.__driving_allowed and self.__is_active \
                 and not self.__next_targets_timestamp > next_targets_timestamp:
             left, right = DriveToPoint.compute_speed(location, target)
-            left, right = drive_support_logic.limit_due_to_distance(left, right, self.__scan.get_points())
+
             left, right = self.__low_pass(left, right)
             left, right = int(left), int(right)
             self.__driver_proxy.send_motors_command(left, right, left, right)

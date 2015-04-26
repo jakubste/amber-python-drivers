@@ -60,7 +60,7 @@ setup(
     test_suite="amberdriver.tests",
     include_package_data=True,
     install_requires=required,
-    version='1.17',
+    version='1.19',
     description='Amber drivers in python',
     author=u'Paweł Suder',
     author_email='pawel@suder.info',

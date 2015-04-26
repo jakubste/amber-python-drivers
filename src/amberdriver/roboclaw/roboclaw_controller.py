@@ -247,6 +247,7 @@ class RoboclawDriver(object):
         self.__reset_timeouts()
         while not self.__battery_low and self.__is_active:
             act_time = time.time()
+
             self.__timeout_lock.acquire()
             try:
                 do_stop = False
@@ -260,10 +261,12 @@ class RoboclawDriver(object):
                     self.__reset_time = act_time + RESET_IDLE_TIMEOUT / 1000.0
             finally:
                 self.__timeout_lock.release()
+
             if do_stop:
                 self.stop()
             if do_reset:
                 self.__reset_and_wait()
+
             time.sleep(0.1)
 
     def __read_main_battery_voltage_level(self):
@@ -295,30 +298,37 @@ class RoboclawDriver(object):
     def error_monitor_loop(self):
         while self.__is_active:
             time.sleep(ERROR_MONITOR_INTERVAL / 1000.0)
+
             front_error_status, rear_error_status = self.__read_error_state()
             if front_error_status != 0 or rear_error_status != 0:
                 front_error_status_tmp = front_error_status
                 rear_error_status_tmp = rear_error_status
                 same_errors = True
+
                 for _ in range(CRITICAL_READ_REPEATS):
                     front_error_status, rear_error_status = self.__read_error_state()
                     if front_error_status != front_error_status_tmp or rear_error_status != rear_error_status_tmp:
                         same_errors = False
                         break
+
                 if same_errors:
                     if front_error_status != 0:
                         self.__logger.warn('Front error: %f', front_error_status)
+
                     if rear_error_status != 0:
                         self.__logger.warn('Rear error: %f', rear_error_status)
+
                     if front_error_status == 0x20 or rear_error_status == 0x20:
                         self.__led2_gpio.write('0')
                         self.__led2_gpio.flush()
                         self.__battery_low = True
+                        self.__logger.error('Battery low!')
                         return
                     elif front_error_status < 0 or rear_error_status < 0:
                         self.__logger.warn('Bad feelings: error status(es) less than zero. It looks that CRC is wrong.')
                         self.__reset_and_wait()
                     else:
+                        self.__logger.warn('Something wrong. Reset anyway.')
                         self.__reset_and_wait()
 
     def __read_temperature(self):
@@ -336,6 +346,7 @@ class RoboclawDriver(object):
             if not self.__roboclaw_disabled:
                 front_temp, rear_temp = self.__read_temperature()
                 self.__logger.info('Temperature: front %fC, rear: %fC', front_temp, rear_temp)
+
                 if self.__overheated:
                     if front_temp < TEMPERATURE_DROP and rear_temp < TEMPERATURE_DROP:
                         for _ in range(CRITICAL_READ_REPEATS):
@@ -345,6 +356,7 @@ class RoboclawDriver(object):
                                 self.__logger.error('Roboclaw overheated')
                                 self.__overheated = True
                                 break
+
                         if not self.__overheated:
                             self.__logger.warn('Roboclaw cooled down, reset')
                             self.__reset_and_wait()
@@ -358,6 +370,7 @@ class RoboclawDriver(object):
                                 self.__logger.warn('Roboclaw not overheated')
                                 self.__overheated = False
                                 break
+
                         if self.__overheated:
                             self.__logger.error('Roboclaw overheated, waiting for cool down to %fC', TEMPERATURE_DROP)
                             self.stop()

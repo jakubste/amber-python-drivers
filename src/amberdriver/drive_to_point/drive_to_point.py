@@ -6,7 +6,6 @@ import math
 import traceback
 
 import os
-
 from ambercommon.common import runtime
 
 from amberclient.common.listener import Listener
@@ -121,47 +120,55 @@ class DriveToPoint(object):
 
     def location_loop(self):
         sleep_interval = 0.5
+
         last_location = self.__location_proxy.get_location()
         last_location = last_location.get_location()
         self.__current_location = last_location
+
         time.sleep(sleep_interval)
         while self.__is_active:
             current_location = self.__location_proxy.get_location()
             current_location = current_location.get_location()
             self.__current_location = current_location
+
             try:
                 sleep_interval = compute_sleep_interval(current_location[DriveToPoint.TIMESTAMP_FIELD],
                                                         last_location[DriveToPoint.TIMESTAMP_FIELD],
                                                         sleep_interval)
             except TypeError:
                 traceback.print_exc()
+
             last_location = current_location
             time.sleep(sleep_interval)
 
     def driving_loop(self):
-        driving = False
         while self.__is_active:
-            try:
-                while self.__is_active:
-                    self.__targets_lock.acquire()
-                    try:
-                        target = self.__next_targets[0]
-                        driving = True
-                    finally:
-                        self.__targets_lock.release()
-                    self.__drive_to(target, self.__next_targets_timestamp)
-                    self.__add_target_to_visited(target)
-            except IndexError:
-                if driving:
-                    self.__logger.warning('Next targets list is empty, stop driving.')
-                    self.__stop()
-                    driving = False
+            self.__drive_to_loop()
             time.sleep(0.1)
+
+    def __drive_to_loop(self):
+        target = self.__get_next_target()
+        while self.__is_active and target is not None:
+            self.__drive_to(target, self.__next_targets_timestamp)
+            self.__add_target_to_visited(target)
+            target = self.__get_next_target()
+        self.__logger.warning('Next targets list is empty, stop driving.')
+        self.__stop()
+
+    def __get_next_target(self):
+        self.__targets_lock.acquire()
+        try:
+            return self.__next_targets[0]
+        except IndexError:
+            return None
+        finally:
+            self.__targets_lock.release()
 
     def __drive_to(self, target, next_targets_timestamp):
         self.__logger.info('Drive to %s', str(target))
 
         sleep_interval = 0.5
+
         location = self.__current_location
         while location is None:
             time.sleep(sleep_interval)
@@ -243,14 +250,12 @@ class DriveToPoint(object):
         if abs(drive_angle) < math.pi / 18:  # 10st
             # drive normal
             left, right = MAX_SPEED, MAX_SPEED
-
         elif abs(drive_angle) > math.pi / DRIVING_ALPHA:
             # rotate in place
             left = -MAX_SPEED
             right = MAX_SPEED
             if drive_angle < 0:
                 left, right = right, left
-
         else:
             # drive on turn
             left = MAX_SPEED - DriveToPoint.compute_change(drive_angle)

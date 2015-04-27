@@ -56,7 +56,7 @@ TEMPERATURE_MONITOR_INTERVAL = float(config.ROBOCLAW_TEMPERATURE_MONITOR_INTERVA
 TEMPERATURE_CRITICAL = float(config.ROBOCLAW_TEMPERATURE_CRITICAL)
 TEMPERATURE_DROP = float(config.ROBOCLAW_TEMPERATURE_DROP)
 
-TIMEOUT = 0.3
+TIMEOUT = 0.7
 
 
 class RoboclawController(MessageHandler):
@@ -325,8 +325,9 @@ class RoboclawDriver(object):
                         self.__logger.error('Battery low!')
                         return
                     elif front_error_status < 0 or rear_error_status < 0:
-                        self.__logger.warn('Bad feelings: error status(es) less than zero. It looks that CRC is wrong.')
-                        self.__reset_and_wait()
+                        self.__logger.warn('Bad feelings: error status(es) less than zero. '
+                                           'It looks that CRC is wrong or nothing is returned '
+                                           'from Roboclaw.')
                     else:
                         self.__logger.warn('Something wrong. Reset anyway.')
                         self.__reset_and_wait()

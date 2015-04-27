@@ -160,18 +160,21 @@ class DriveToPoint(object):
             time.sleep(sleep_interval)
 
     def driving_loop(self):
+        driving = False
         while self.__is_active:
-            self.__drive_to_loop()
-            time.sleep(0.1)
-
-    def __drive_to_loop(self):
-        target = self.__get_next_target()
-        while self.__is_active and target is not None:
-            self.__drive_to(target, self.__next_targets_timestamp)
-            self.__add_target_to_visited(target)
             target = self.__get_next_target()
-        self.__logger.warning('Next targets list is empty, stop driving.')
-        self.__stop()
+            while self.__is_active and target is not None:
+                driving = True
+                self.__drive_to(target, self.__next_targets_timestamp)
+                self.__add_target_to_visited(target)
+                target = self.__get_next_target()
+
+            if driving:
+                self.__logger.warning('Next targets list is empty, stop driving.')
+                self.__stop()
+                driving = False
+
+            time.sleep(0.1)
 
     def __get_next_target(self):
         self.__targets_lock.acquire()

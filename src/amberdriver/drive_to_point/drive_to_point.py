@@ -11,6 +11,7 @@ from ambercommon.common import runtime
 
 from amberclient.common.listener import Listener
 
+from amberdriver.drive_support import drive_support_logic
 from amberdriver.tools import config, bound_sleep_interval
 
 
@@ -39,12 +40,29 @@ def compute_sleep_interval(current_timestamp, last_timestamp, sleep_interval,
     return sleep_interval
 
 
+class Map(object):
+    def __init__(self):
+        pass
+
+    def add(self, x, y):
+        pass
+
+    def refresh(self):
+        pass
+
+    def flush(self):
+        pass
+
+    def exists(self, x, y):
+        pass
+
+
 class ScanHandler(Listener):
     def __init__(self, driver):
-        self.__driver_support = driver
+        self.__drive_support = driver
 
     def handle(self, response):
-        self.__driver_support.set_scan(response)
+        self.__drive_support.set_scan(response)
 
 
 class DriveToPoint(object):
@@ -178,6 +196,19 @@ class DriveToPoint(object):
                 and not self.__next_targets_timestamp > next_targets_timestamp:
             left, right = DriveToPoint.compute_speed(location, target)
 
+            """
+            TODO(paoolo): do nice stuff with avoiding obstacles
+            * map scan histogram to cartesian grid
+            * update temporary map (remove old/low priority)
+            * update location (position/angle)
+            * detect obstacles from scan histogram
+            * determine position of destination
+            * determine distance to destination
+            * analyze temporary map to find path to destination
+            * analyze probability of local minimum
+            * drive to (temporary) destination
+            """
+
             left, right = self.__low_pass(left, right)
             left, right = int(left), int(right)
             self.__driver_proxy.send_motors_command(left, right, left, right)
@@ -235,12 +266,12 @@ class DriveToPoint(object):
             # sth wrong, stop!
             return 0.0, 0.0
 
-        location_trust = DriveToPoint.location_trust(location)
-        location_angle = DriveToPoint.normalize_angle(location_angle)
+        location_trust = drive_support_logic.location_trust(location)
+        location_angle = drive_support_logic.normalize_angle(location_angle)
 
         target_angle = math.atan2(target_y - location_y, target_x - location_x)
         drive_angle = target_angle - location_angle
-        drive_angle = DriveToPoint.normalize_angle(drive_angle)
+        drive_angle = drive_support_logic.normalize_angle(drive_angle)
         drive_angle = -drive_angle  # mirrored map
 
         if location_trust < 0.3:
@@ -268,21 +299,6 @@ class DriveToPoint(object):
 
         return left, right
 
-    @staticmethod
-    def location_trust(location):
-        _, _, location_probability, _, location_timestamp = location
-        location_timestamp /= 1000.0
-        current_timestamp = time.time()
-        trust_level = math.pow(4.0 / 3.0, location_timestamp - current_timestamp)
-        return location_probability * trust_level
-
-    @staticmethod
-    def normalize_angle(angle):
-        if angle < -math.pi:
-            angle += 2 * math.pi
-        elif angle > math.pi:
-            angle -= 2 * math.pi
-        return angle
 
     @staticmethod
     def compute_change(drive_angle):

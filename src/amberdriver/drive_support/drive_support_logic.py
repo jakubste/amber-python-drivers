@@ -28,6 +28,14 @@ def get_angle(left, right, robo_width):
     return math.atan2(left - right, float(robo_width))
 
 
+def normalize_angle(angle):
+    if angle < -math.pi:
+        angle += 2 * math.pi
+    elif angle > math.pi:
+        angle -= 2 * math.pi
+    return angle
+
+
 def get_speed(left, right):
     return (left + right) / 2.0
 
@@ -230,8 +238,9 @@ def limit_due_to_reverse_direction(left, right):
     return left, right
 
 
-def rodeo_swap(left, right, scan):
-    current_angle = get_angle(left, right, ROBO_WIDTH)
+def rodeo_and_swap(left, right, scan):
+    current_angle = get_angle(left, right,
+                              ROBO_WIDTH)
     current_speed = get_speed(left, right)
 
     min_distance, min_distance_angle = get_min_distance(scan, current_angle,
@@ -269,14 +278,17 @@ def rodeo_swap(left, right, scan):
     return left, right
 
 
-def low_pass_filter(left, right):
-    # TODO implement low pass filter
-    return left, right
-
-
 def scan_trust(scan_timestamp, current_timestamp):
     val = scan_timestamp / 1000.0 - current_timestamp
     return math.pow(4.0 / 3.0, val)
+
+
+def location_trust(location):
+    _, _, location_probability, _, location_timestamp = location
+    location_timestamp /= 1000.0
+    current_timestamp = time.time()
+    trust_level = math.pow(4.0 / 3.0, location_timestamp - current_timestamp)
+    return location_probability * trust_level
 
 
 def command_trust(command_timestamp, current_timestamp):

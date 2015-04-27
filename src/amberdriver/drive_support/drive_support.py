@@ -3,7 +3,6 @@ import logging.config
 import time
 
 import os
-
 from amberclient.common.listener import Listener
 
 from ambercommon.common import runtime
@@ -29,30 +28,31 @@ class ScanHandler(Listener):
         self.__driver_support.set_scan(response)
 
 
-class Speeds(object):
-    def __init__(self, speeds, timestamp):
-        self.__speeds, self.__timestamp = speeds, timestamp
+class MotionHandler(Listener):
+    def __init__(self, driver):
+        self.__drive_support = driver
 
-    def get_speeds(self):
-        return self.__speeds
-
-    def get_timestamp(self):
-        return self.__timestamp
+    def handle(self, response):
+        self.__drive_support.set_motion(response)
 
 
 class DriveSupport(object):
-    def __init__(self, roboclaw_driver, hokuyo_proxy):
+    def __init__(self, roboclaw_driver, hokuyo_proxy, ninedof_proxy):
         self.__scan = None
-        self.__speeds = Speeds((0, 0, 0, 0), 0.0)
+        self.__motion = None
 
         self.__roboclaw_driver = roboclaw_driver
 
         self.__is_active = True
 
         self.__hokuyo_proxy = hokuyo_proxy
+        self.__ninedof_proxy = ninedof_proxy
+
         self.__hokuyo_listener = ScanHandler(self)
+        self.__ninedof_listener = MotionHandler(self)
 
         hokuyo_proxy.subscribe(self.__hokuyo_listener)
+        ninedof_proxy.subscribe(self.__ninedof_listener)
 
         self.__logger = logging.getLogger(LOGGER_NAME)
 
@@ -68,38 +68,49 @@ class DriveSupport(object):
     def set_scan(self, scan):
         self.__scan = scan
 
+    def set_motion(self, motion):
+        self.__motion = motion
+
     def set_speeds(self, front_left, front_right, rear_left, rear_right):
-        self.__speeds = Speeds((front_left, front_right, rear_left, rear_right), time.time())
-        current_speeds = DriveSupport.__drive_support(self.__speeds, self.__scan)
-        (front_left, front_right, rear_left, rear_right) = current_speeds
-        self.__roboclaw_driver.set_speeds(front_left, front_right, rear_left, rear_right)
+        fl, fr, rl, rr = front_left, front_right, rear_left, rear_right
+        fl, fr, rl, rr = DriveSupport.__drive_support(fl, fr, rl, rr, time.time(), self.__scan)
+        self.__roboclaw_driver.set_speeds(fl, fr, rl, rr)
 
     def get_measured_speeds(self):
         return self.__roboclaw_driver.get_measured_speeds()
 
     @staticmethod
-    def __drive_support(speeds, scan):
+    def __drive_support(fl, fr, rl, rr, speed_ts, scan):
         if scan is None:
             return 0, 0, 0, 0
 
-        current_speeds_timestamp = speeds.get_timestamp()
-        speeds_values = speeds.get_speeds()
-
-        current_scan_timestamp = scan.get_timestamp()
+        scan_ts = scan.get_timestamp()
         scan_points = scan.get_points()
 
-        (front_left, front_right, rear_left, rear_right) = speeds_values
+        fl, fr = drive_support_logic.limit_due_to_distance(fl, fr, scan_points)
+        rl, rr = drive_support_logic.limit_due_to_distance(rl, rr, scan_points)
 
-        front_left, front_right = drive_support_logic.limit_due_to_distance(front_left, front_right, scan_points)
-        rear_left, rear_right = drive_support_logic.limit_due_to_distance(rear_left, rear_right, scan_points)
+        """
+        TODO(paoolo): do nice stuff with avoiding obstacles
+        * filter speed values
+        * filter motion values
+        * filter distances values
+        * predict acc/gyro values
+        * compare predicted values with real data
+        * detect robot motion state (?)
+        * apply amendment to speed (?)
+        * lookahead around robot
+        * smooth speed changes
+        * apply trust values
+        """
 
         current_timestamp = time.time()
-        trust_level = drive_support_logic.scan_trust(current_scan_timestamp, current_timestamp) * \
-                      drive_support_logic.command_trust(current_speeds_timestamp, current_timestamp)
+        trust_level = drive_support_logic.scan_trust(scan_ts, current_timestamp) * \
+                      drive_support_logic.command_trust(speed_ts, current_timestamp)
 
-        front_left *= trust_level
-        rear_left *= trust_level
-        front_right *= trust_level
-        rear_right *= trust_level
+        fl *= trust_level
+        rl *= trust_level
+        fr *= trust_level
+        rr *= trust_level
 
-        return int(front_left), int(front_right), int(rear_left), int(rear_right)
+        return int(fl), int(fr), int(rl), int(rr)

@@ -226,7 +226,6 @@ def data_trust(data_ts, curr_ts):
 
 def location_trust(location):
     _, _, location_probability, _, location_timestamp = location
-    location_timestamp /= 1000.0
     current_timestamp = time.time()
     return location_probability * data_trust(location_timestamp, current_timestamp)
 

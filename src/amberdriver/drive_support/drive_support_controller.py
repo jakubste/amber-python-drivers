@@ -8,7 +8,6 @@ from amberclient.ninedof.ninedof import NinedofProxy
 import os
 import serial
 from amberclient.common.amber_client import AmberClient
-
 from amberclient.hokuyo.hokuyo import HokuyoProxy
 
 from amberdriver.drive_support.drive_support import DriveSupport
@@ -76,11 +75,14 @@ if __name__ == '__main__':
                                                 name='error-monitor-thread')
         temperature_monitor_thread = threading.Thread(target=roboclaw_driver.temperature_monitor_loop,
                                                       name='temperature-monitor-thread')
+        measuring_thread = threading.Thread(target=drive_support.measure_loop,
+                                            name='measuring-thread')
 
         timeout_monitor_thread.start()
         battery_monitor_thread.start()
         error_monitor_thread.start()
         temperature_monitor_thread.start()
+        measuring_thread.start()
 
         controller.run()
 

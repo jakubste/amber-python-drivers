@@ -4,7 +4,6 @@ import time
 
 import os
 from amberclient.common.listener import Listener
-
 from ambercommon.common import runtime
 
 from amberdriver.drive_support import drive_support_logic
@@ -38,8 +37,12 @@ class MotionHandler(Listener):
 
 class DriveSupport(object):
     def __init__(self, roboclaw_driver, hokuyo_proxy, ninedof_proxy):
-        self.__scan = None
-        self.__motion = None
+        self.__scan, self.__scan_ts = None, 0.0
+        self.__motion, self.__motion_ts = None, 0.0
+        self.__measured_speed, self.__measure_ts = None, 0.0
+
+        self.__first_lpf = LowPassFilter([0.0] * 4)
+        self.__last_lpf = LowPassFilter([0.0] * 4)
 
         self.__roboclaw_driver = roboclaw_driver
 
@@ -66,47 +69,48 @@ class DriveSupport(object):
         self.__roboclaw_driver.stop()
 
     def set_scan(self, scan):
-        self.__scan = scan
+        self.__scan = scan.get_points()
+        self.__scan_ts = scan.get_timestamp()
 
     def set_motion(self, motion):
         self.__motion = motion
+        self.__motion_ts = time.time()
 
     def set_speeds(self, front_left, front_right, rear_left, rear_right):
         fl, fr, rl, rr = front_left, front_right, rear_left, rear_right
-        fl, fr, rl, rr = DriveSupport.__drive_support(fl, fr, rl, rr, time.time(), self.__scan)
+        fl, fr, rl, rr = self.__drive_support(fl, fr, rl, rr)
         self.__roboclaw_driver.set_speeds(fl, fr, rl, rr)
 
     def get_measured_speeds(self):
-        return self.__roboclaw_driver.get_measured_speeds()
+        return self.__measured_speed
 
-    @staticmethod
-    def __drive_support(fl, fr, rl, rr, speed_ts, scan):
-        if scan is None:
+    def measure_loop(self):
+        while self.__is_active:
+            self.__measured_speed = self.__roboclaw_driver.get_measured_speeds()
+            self.__measure_ts = time.time()
+            time.sleep(0.1)
+
+    def __drive_support(self, fl, fr, rl, rr):
+        if self.__scan is None:
             return 0, 0, 0, 0
 
-        scan_ts = scan.get_timestamp()
-        scan_points = scan.get_points()
-
-        fl, fr = drive_support_logic.limit_due_to_distance(fl, fr, scan_points)
-        rl, rr = drive_support_logic.limit_due_to_distance(rl, rr, scan_points)
-
         """
-        TODO(paoolo): do nice stuff with avoiding obstacles
-        * filter speed values
+        TODO(paoolo):
         * filter motion values
         * filter distances values
-        * predict acc/gyro values
-        * compare predicted values with real data
-        * detect robot motion state (?)
-        * apply amendment to speed (?)
-        * lookahead around robot
-        * smooth speed changes
-        * apply trust values
         """
 
-        current_timestamp = time.time()
-        trust_level = drive_support_logic.scan_trust(scan_ts, current_timestamp) * \
-                      drive_support_logic.command_trust(speed_ts, current_timestamp)
+        fl, fr, rl, rr = self.__first_lpf.compute([fl, fr, rl, rr])
+
+        fl, fr, rl, rr = drive_support_logic.adjust_speed(fl, fr, rl, rr, self.__motion, self.__measured_speed)
+        fl, fr, rl, rr = drive_support_logic.limit_speed(fl, fr, rl, rr, self.__scan)
+
+        fl, fr, rl, rr = self.__last_lpf.compute([fl, fr, rl, rr])
+
+        ts = time.time()
+        trust_level = drive_support_logic.data_trust(self.__scan_ts, ts) * \
+                      drive_support_logic.data_trust(self.__motion_ts, ts) * \
+                      drive_support_logic.data_trust(self.__measure_ts, ts)
 
         fl *= trust_level
         rl *= trust_level
@@ -114,3 +118,14 @@ class DriveSupport(object):
         rr *= trust_level
 
         return int(fl), int(fr), int(rl), int(rr)
+
+
+class LowPassFilter(object):
+    def __init__(self, values, alpha=0.3):
+        self.__values = values
+        self.__alpha = alpha
+
+    def compute(self, values):
+        values = map(lambda (prev, curr): (prev + self.__alpha * (curr - prev)), zip(self.__values, values))
+        self.__values = values
+        return values

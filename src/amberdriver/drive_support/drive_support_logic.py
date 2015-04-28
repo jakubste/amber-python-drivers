@@ -219,68 +219,8 @@ def __limit_to_max_speed(value):
         else value
 
 
-def limit_due_to_reverse_direction(left, right):
-    max_speed = MAX_SPEED
-
-    if (left + right) / 2.0 < 0:
-
-        if left < 0 and right < 0:
-            left = left if left > -max_speed else -max_speed
-            right = right if right > -max_speed else -max_speed
-
-        elif left < 0 < right:
-            right = right if right < max_speed else max_speed
-            left = -right
-
-        elif left > 0 > right:
-            left = left if left < max_speed else max_speed
-            right = -left
-
-    return left, right
-
-
-def rodeo_and_swap(left, right, scan):
-    current_angle = get_angle(left, right,
-                              ROBO_WIDTH)
-    current_speed = get_speed(left, right)
-
-    min_distance, min_distance_angle = get_min_distance(scan, current_angle,
-                                                        SCANNER_DIST_OFFSET, ANGLE_RANGE)
-
-    if min_distance is not None:
-        soft_limit = get_soft_limit(current_speed,
-                                    MAX_SPEED, SOFT_LIMIT, HARD_LIMIT, RODEO_SWAP_ALPHA)
-
-        if min_distance < soft_limit:
-            if min_distance_angle < current_angle:
-                if left > 0:
-                    left = left if left < MAX_ROTATING_SPEED else MAX_ROTATING_SPEED
-                    right = -left
-                else:
-                    if right > 0:
-                        _t = left
-                        left = right
-                        right = _t
-
-            else:
-                if right > 0:
-                    right = right if right < MAX_ROTATING_SPEED else MAX_ROTATING_SPEED
-                    left = -right
-                else:
-                    if left > 0:
-                        _t = right
-                        right = left
-                        left = _t
-
-        elif min_distance < soft_limit * 0.4:
-            left = -left
-            right = -right
-
-    return left, right
-
-
-def scan_trust(scan_timestamp, current_timestamp):
-    val = scan_timestamp / 1000.0 - current_timestamp
+def data_trust(data_ts, curr_ts):
+    val = data_ts / 1000.0 - curr_ts
     return math.pow(4.0 / 3.0, val)
 
 
@@ -288,10 +228,112 @@ def location_trust(location):
     _, _, location_probability, _, location_timestamp = location
     location_timestamp /= 1000.0
     current_timestamp = time.time()
-    trust_level = math.pow(4.0 / 3.0, location_timestamp - current_timestamp)
-    return location_probability * trust_level
+    return location_probability * data_trust(location_timestamp, current_timestamp)
 
 
-def command_trust(command_timestamp, current_timestamp):
-    val = command_timestamp - current_timestamp
-    return math.pow(4.0 / 3.0, val)
+def convert_grid_to_polar(x, y):
+    angle = math.atan2(y, x)
+    value = math.sqrt(x ** 2 + y ** 2)
+    return angle, value
+
+
+def convert_polar_to_grid(value, angle):
+    x = value * math.cos(angle)
+    y = value * math.cos(angle)
+    return x, y
+
+
+def convert_speed_grid_to_polar(velocity_x, velocity_y):
+    return convert_grid_to_polar(velocity_x, velocity_y)
+
+
+def convert_speed_polar_to_grid(velocity, angle):
+    return convert_polar_to_grid(velocity, angle)
+
+
+def convert_map_grid_to_polar(map_grid):
+    map_polar = []
+    for x, y in map_grid:
+        angle, distance = convert_grid_to_polar(x, y)
+        map_polar.append((angle, distance))
+    return map_polar
+
+
+def convert_map_polar_to_grid(map_polar):
+    map_grid = []
+    for angle, distance in map_polar:
+        x, y = convert_polar_to_grid(distance, angle)
+        map_grid.append((x, y))
+    return map_grid
+
+
+class Map(object):
+    def __init__(self):
+        self.__map = {}
+
+    def add(self, x, y, angle=None, distance=None):
+        if angle is not None and distance is not None:
+            _x, _y = convert_polar_to_grid(distance, angle)
+            x += _x
+            y += _y
+        if x not in self.__map:
+            self.__map[x] = {}
+        if y not in self.__map[x]:
+            self.__map[x][y] = time.time()
+
+
+def motion_to_speed(motion,
+                    acc_function=lambda acc: acc,
+                    rev_function=lambda rev: rev):
+    accel = motion.get_accel()
+    gyro = motion.get_gyro()
+
+    acc_x, acc_y = accel.x_axis, accel.y_axis
+    acc_x, acc_y = acc_function(acc_x), acc_function(acc_y)
+    acc, angle = convert_grid_to_polar(acc_x, acc_y)
+
+    gyro_val = gyro.z_axis
+    rev = rev_function(gyro_val)
+
+    if not gyro_val == 0:
+        pass
+
+        # acc -> motion in any way
+        # gyro -> turn left or right
+
+
+def speed_to_motion(speed):
+    pass
+
+
+def compute_obstacle_forces(map_polar,
+                            distance_function=lambda (distance, angle): distance,
+                            force_function=lambda (force_x, force_y, angle): (force_x, force_y)):
+    sum_force_x, sum_force_y = 0.0, 0.0
+    for angle, distance in map_polar:
+        distance = distance_function(distance, angle)
+        force_x, force_y = convert_polar_to_grid(distance, angle)
+        force_x, force_y = force_function(force_x, force_y, angle)
+        sum_force_x += force_x
+        sum_force_y += force_y
+
+
+def compute_target_force():
+    pass
+
+
+def adjust_speed(fl, fr, rl, rr, motion_data, measured_speed):
+    """
+    * analyze robo motion: from gyro/accel and measured speed
+    * adjust speed
+    """
+    return fl, fr, rl, rr
+
+
+def limit_speed(fl, fr, rl, rr, environment_scan):
+    """
+    * lookahead around robot
+    * verify state
+    * limit if necessary
+    """
+    return fl, fr, rl, rr

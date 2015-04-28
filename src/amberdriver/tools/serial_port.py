@@ -29,12 +29,12 @@ class SerialPort(object):
         self.__port.write(chr(address))
         self.__checksum += command
         self.__port.write(chr(command))
-        self.__port.flush()
+        self.__port.flushInput()
 
     def read_byte(self):
         res = self.__port.read(1)
         if res == '':
-            self.__port.flush()
+            self.__port.flushInput()
             res = self.__port.read(1)
         if len(res) == 1:
             val = struct.unpack('>B', res)
@@ -45,7 +45,7 @@ class SerialPort(object):
     def read_sbyte(self):
         res = self.__port.read(1)
         if res == '':
-            self.__port.flush()
+            self.__port.flushInput()
             res = self.__port.read(1)
         if len(res) == 1:
             val = struct.unpack('>b', res)
@@ -56,7 +56,7 @@ class SerialPort(object):
     def read_word(self):
         res = self.__port.read(2)
         if res == '':
-            self.__port.flush()
+            self.__port.flushInput()
             res = self.__port.read(2)
         if len(res) == 2:
             val = struct.unpack('>H', res)
@@ -68,7 +68,7 @@ class SerialPort(object):
     def read_sword(self):
         res = self.__port.read(2)
         if res == '':
-            self.__port.flush()
+            self.__port.flushInput()
             res = self.__port.read(2)
         if len(res) == 2:
             val = struct.unpack('>h', res)
@@ -80,7 +80,7 @@ class SerialPort(object):
     def read_long(self):
         res = self.__port.read(4)
         if res == '':
-            self.__port.flush()
+            self.__port.flushInput()
             res = self.__port.read(4)
         if len(res) == 4:
             val = struct.unpack('>L', res)
@@ -94,7 +94,7 @@ class SerialPort(object):
     def read_slong(self):
         res = self.__port.read(4)
         if res == '':
-            self.__port.flush()
+            self.__port.flushInput()
             res = self.__port.read(4)
         if len(res) == 4:
             val = struct.unpack('>l', res)

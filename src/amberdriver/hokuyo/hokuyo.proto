@@ -7,7 +7,6 @@ import "drivermsg.proto";
 extend amber.DriverMsg {
     optional bool get_single_scan = 40;
     optional Scan scan = 41;
-    optional bool enable_scanning = 42;
     optional int64 timestamp = 49;
 }
 

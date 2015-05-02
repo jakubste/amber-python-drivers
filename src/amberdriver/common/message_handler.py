@@ -2,8 +2,9 @@ from functools import wraps
 import logging
 import threading
 import logging.config
-import abc
+import time
 
+import abc
 import os
 
 from amberdriver.common import drivermsg_pb2
@@ -12,9 +13,10 @@ from amberdriver.common.amber_pipes import AmberPipes
 
 __author__ = 'paoolo'
 
-LOGGER_NAME = 'MessageHandler'
 pwd = os.path.dirname(os.path.abspath(__file__))
 logging.config.fileConfig('%s/amber.ini' % pwd)
+
+LOGGER_NAME = 'MessageHandler'
 
 
 class MessageHandler(object):
@@ -70,6 +72,11 @@ class MessageHandler(object):
             response_message = self.fill_subscription_response(response_message)
 
             self.get_pipes().write_header_and_message_to_pipe(response_header, response_message)
+
+    def sending_loop(self):
+        while self.is_alive():
+            self.send_subscribers_message()
+            time.sleep(0.1)
 
     def __get_subscribers(self):
         self.__subscribers_lock.acquire()

@@ -1,12 +1,12 @@
 import struct
+import unittest
+
+import mock
 
 from amberdriver.tools import serial_port
 
 
 __author__ = 'paoolo'
-
-import unittest
-import mock
 
 
 class SerialPortTestCase(unittest.TestCase):
@@ -240,4 +240,3 @@ class WriteSignedLongTestCase(SerialPortTestCase):
             self.mocked_serial_port.write.assert_called_once_with(packed_value)
             checksum = ((value & 0xFF) + ((value >> 8) & 0xFF) + ((value >> 16) & 0xFF) + ((value >> 24) & 0xFF)) & 0x7F
             self.assertEqual(self.port.get_checksum(), checksum)
-

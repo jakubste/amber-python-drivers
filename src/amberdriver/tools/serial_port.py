@@ -1,4 +1,5 @@
 import struct
+import sys
 
 __author__ = 'paoolo'
 
@@ -10,6 +11,21 @@ class SerialPort(object):
 
     def close(self):
         self.__port.close()
+
+    def flush(self):
+        result = ''
+        flushing = True
+
+        self.__port.flush()
+        self.__port.flushInput()
+        self.__port.flushOutput()
+
+        while flushing:
+            char = self.__port.read(1)
+            flushing = (char != '')
+            result += char
+
+        sys.stderr.write('\n===============\nFLUSH SERIAL PORT\n===============\n%s\n===============\n' % result)
 
     def get_checksum(self, mask=0x7F):
         return self.__checksum & mask

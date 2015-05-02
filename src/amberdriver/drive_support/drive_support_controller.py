@@ -2,12 +2,13 @@ import logging
 import logging.config
 import sys
 import threading
-import traceback
 
+import traceback
 from amberclient.ninedof.ninedof import NinedofProxy
 import os
 import serial
 from amberclient.common.amber_client import AmberClient
+
 from amberclient.hokuyo.hokuyo import HokuyoProxy
 
 from amberdriver.drive_support.drive_support import DriveSupport
@@ -31,7 +32,7 @@ BAUD_RATE = config.ROBOCLAW_BAUD_RATE
 REAR_RC_ADDRESS = int(config.ROBOCLAW_REAR_RC_ADDRESS)
 FRONT_RC_ADDRESS = int(config.ROBOCLAW_FRONT_RC_ADDRESS)
 
-TIMEOUT = 0.3
+TIMEOUT = 0.7
 
 if __name__ == '__main__':
     try:
@@ -40,9 +41,7 @@ if __name__ == '__main__':
 
         roboclaw_front = Roboclaw(_serial_port, FRONT_RC_ADDRESS)
         roboclaw_rear = Roboclaw(_serial_port, REAR_RC_ADDRESS)
-
         roboclaw_driver = RoboclawDriver(roboclaw_front, roboclaw_rear)
-        roboclaw_driver.setup()
 
         sys.stderr.write('FIRMWARE VERSION, FRONT:\n%s\n' % str(roboclaw_front.read_firmware_version()))
         sys.stderr.write('FIRMWARE VERSION, REAR:\n%s\n' % str(roboclaw_rear.read_firmware_version()))
@@ -69,19 +68,13 @@ if __name__ == '__main__':
 
         timeout_monitor_thread = threading.Thread(target=roboclaw_driver.timeout_monitor_loop,
                                                   name='timeout-monitor-thread')
-        battery_monitor_thread = threading.Thread(target=roboclaw_driver.battery_monitor_loop,
-                                                  name='battery-monitor-thread')
         error_monitor_thread = threading.Thread(target=roboclaw_driver.error_monitor_loop,
                                                 name='error-monitor-thread')
-        temperature_monitor_thread = threading.Thread(target=roboclaw_driver.temperature_monitor_loop,
-                                                      name='temperature-monitor-thread')
         measuring_thread = threading.Thread(target=drive_support.measure_loop,
                                             name='measuring-thread')
 
         timeout_monitor_thread.start()
-        battery_monitor_thread.start()
         error_monitor_thread.start()
-        temperature_monitor_thread.start()
         measuring_thread.start()
 
         controller.run()

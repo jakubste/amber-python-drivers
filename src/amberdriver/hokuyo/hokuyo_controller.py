@@ -2,15 +2,14 @@ import logging
 import logging.config
 import sys
 import threading
-import traceback
-import time
 
+import traceback
 import os
 import serial
 
 from amberdriver.common.message_handler import MessageHandler
 from amberdriver.hokuyo import hokuyo_pb2
-from amberdriver.hokuyo.hokuyo import Hokuyo
+from amberdriver.hokuyo.hokuyo import Hokuyo, HokuyoDriver
 from amberdriver.null.null import NullController
 from amberdriver.tools import serial_port, config
 
@@ -77,27 +76,16 @@ class HokuyoController(MessageHandler):
         return response_message
 
 
-def sending_loop(_controller):
-    while _controller.is_alive():
-        _controller.send_subscribers_message()
-        time.sleep(0.1)
-
-
 if __name__ == '__main__':
     try:
         _serial = serial.Serial(port=SERIAL_PORT, baudrate=BAUD_RATE, timeout=TIMEOUT)
         _serial_port = serial_port.SerialPort(_serial)
 
-        _serial.write('QT\nRS\nQT\n')
-        result = ''
-        flushing = True
-        while flushing:
-            char = _serial.read()
-            flushing = (char != '')
-            result += char
-        sys.stderr.write('\n===============\nFLUSH SERIAL PORT\n"%s"\n===============\n' % result)
-
         hokuyo = Hokuyo(_serial_port)
+        hokuyo_driver = HokuyoDriver(hokuyo,
+                                     motor_speed=SPEED_MOTOR,
+                                     high_sensitive=HIGH_SENSITIVE,
+                                     multi_scanning_allowed=ENABLE_MULTI_SCANNING)
 
         sys.stderr.write('RESET:\n%s\n' % hokuyo.reset())
         sys.stderr.write('LASER_ON:\n%s\n' % hokuyo.laser_on())
@@ -108,14 +96,14 @@ if __name__ == '__main__':
         sys.stderr.write('SENSOR_STATE:\n%s\n' % hokuyo.get_sensor_state())
         sys.stderr.write('VERSION_INFO:\n%s\n' % hokuyo.get_version_info())
 
-        hokuyo.enable_scanning(ENABLE_MULTI_SCANNING)
-        scanning_thread = threading.Thread(target=hokuyo.scanning_loop, name='scanning-thread')
-        scanning_thread.start()
-
         controller = HokuyoController(sys.stdin, sys.stdout, hokuyo)
-        hokuyo.set_controller(controller)
 
-        sending_thread = threading.Thread(target=sending_loop, args=(controller,))
+        scanning_thread = threading.Thread(target=hokuyo_driver.scanning_loop,
+                                           name='scanning-thread')
+        sending_thread = threading.Thread(target=controller.sending_loop,
+                                          name='subscribers-thread')
+
+        scanning_thread.start()
         sending_thread.start()
 
         controller.run()

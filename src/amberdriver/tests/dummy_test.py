@@ -1,10 +1,12 @@
+import unittest
+
+import mock
+
 from amberdriver.dummy import dummy_pb2
 from amberdriver.dummy.dummy_controller import DummyController
 
-__author__ = 'paoolo'
 
-import unittest
-import mock
+__author__ = 'paoolo'
 
 
 class DummyControllerTestCase(unittest.TestCase):

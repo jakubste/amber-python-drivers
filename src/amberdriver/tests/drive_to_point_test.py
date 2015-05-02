@@ -1,13 +1,12 @@
+import unittest
+
 import mock
 
 from amberdriver.drive_to_point import drive_to_point_pb2
 from amberdriver.drive_to_point.drive_to_point import DriveToPoint
 from amberdriver.drive_to_point.drive_to_point_controller import DriveToPointController
 
-
 __author__ = 'paoolo'
-
-import unittest
 
 
 class DriveToPointControllerTestCase(unittest.TestCase):

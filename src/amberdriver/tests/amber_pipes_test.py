@@ -1,13 +1,13 @@
 import struct
+import unittest
+
+import mock
 
 from amberdriver.common import drivermsg_pb2
 from amberdriver.common.amber_pipes import AmberPipes, LEN_SIZE
 
 
 __author__ = 'paoolo'
-
-import unittest
-import mock
 
 
 class AmberPipesTestCase(unittest.TestCase):

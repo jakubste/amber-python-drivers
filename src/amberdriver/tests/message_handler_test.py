@@ -1,11 +1,12 @@
-from amberdriver.common import drivermsg_pb2
-from amberdriver.common.message_handler import MessageHandler
-
-__author__ = 'paoolo'
-
 import unittest
 
 import mock
+
+from amberdriver.common import drivermsg_pb2
+from amberdriver.common.message_handler import MessageHandler
+
+
+__author__ = 'paoolo'
 
 
 class MessageHandlerTestCase(unittest.TestCase):

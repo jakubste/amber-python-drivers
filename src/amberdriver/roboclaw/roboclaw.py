@@ -947,7 +947,7 @@ class RoboclawDriver(object):
         self.__i_const = i
         self.__d_const = d
         self.__qpps_const = qpps
-        self.__driving_allowed = False
+        self.__driving_allowed = True
 
         self.__is_active = True
 
@@ -978,7 +978,7 @@ class RoboclawDriver(object):
         self.__led2_gpio.close()
 
     def get_measured_speeds(self):
-        if self.__driving_allowed:
+        if not self.__driving_allowed:
             return 0, 0, 0, 0
 
         self.__roboclaw_lock.acquire()
@@ -998,7 +998,7 @@ class RoboclawDriver(object):
         return front_left, front_right, rear_left, rear_right
 
     def set_speeds(self, front_left, front_right, rear_left, rear_right):
-        if self.__driving_allowed:
+        if not self.__driving_allowed:
             return
 
         front_left = to_qpps(front_left)
@@ -1031,7 +1031,6 @@ class RoboclawDriver(object):
         self.__roboclaw_lock.acquire()
         try:
             self.__driving_allowed = False
-            current_time = time.time()
             self.__reset_gpio.write('1')
             self.__reset_gpio.flush()
             time.sleep(0.0001)

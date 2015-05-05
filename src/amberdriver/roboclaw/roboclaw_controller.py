@@ -28,6 +28,11 @@ BAUD_RATE = int(config.ROBOCLAW_BAUD_RATE)
 REAR_RC_ADDRESS = int(config.ROBOCLAW_REAR_RC_ADDRESS)
 FRONT_RC_ADDRESS = int(config.ROBOCLAW_FRONT_RC_ADDRESS)
 
+MOTORS_MAX_QPPS = int(config.ROBOCLAW_MOTORS_MAX_QPPS)
+MOTORS_P_CONST = int(config.ROBOCLAW_P_CONST)
+MOTORS_I_CONST = int(config.ROBOCLAW_I_CONST)
+MOTORS_D_CONST = int(config.ROBOCLAW_D_CONST)
+
 TIMEOUT = 0.7
 
 
@@ -89,7 +94,8 @@ if __name__ == '__main__':
 
         roboclaw_front = Roboclaw(_serial_port, FRONT_RC_ADDRESS)
         roboclaw_rear = Roboclaw(_serial_port, REAR_RC_ADDRESS)
-        roboclaw_driver = RoboclawDriver(roboclaw_front, roboclaw_rear)
+        roboclaw_driver = RoboclawDriver(roboclaw_front, roboclaw_rear,
+                                         MOTORS_P_CONST, MOTORS_I_CONST, MOTORS_D_CONST, MOTORS_MAX_QPPS)
 
         sys.stderr.write('FIRMWARE VERSION, FRONT:\n%s\n' % str(roboclaw_front.read_firmware_version()))
         sys.stderr.write('FIRMWARE VERSION, REAR:\n%s\n' % str(roboclaw_rear.read_firmware_version()))

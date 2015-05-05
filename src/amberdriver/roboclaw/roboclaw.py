@@ -16,11 +16,6 @@ config.add_config_ini('%s/roboclaw.ini' % pwd)
 
 LOGGER_NAME = 'Roboclaw'
 
-MOTORS_MAX_QPPS = int(config.ROBOCLAW_MOTORS_MAX_QPPS)
-MOTORS_P_CONST = int(config.ROBOCLAW_P_CONST)
-MOTORS_I_CONST = int(config.ROBOCLAW_I_CONST)
-MOTORS_D_CONST = int(config.ROBOCLAW_D_CONST)
-
 WHEEL_RADIUS = float(config.ROBOCLAW_WHEEL_RADIUS)
 PULSES_PER_REVOLUTION = float(config.ROBOCLAW_PULSES_PER_REVOLUTION)
 

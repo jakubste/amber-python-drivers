@@ -2,9 +2,9 @@ import logging
 import logging.config
 import struct
 import threading
-import traceback
 import signal
 
+import traceback
 from ambercommon.common import runtime
 import os
 
@@ -53,8 +53,9 @@ class AmberPipes(object):
             while self.__is_alive:
                 header, message = self.__read_header_and_message_from_pipe()
                 self.__handle_header_and_message(header, message)
-        except BaseException:
+        except BaseException as e:
             self.__logger.fatal('Stop due to error on pipe with mediator')
+            traceback.print_exc(e)
             self.__is_alive = False
             os.kill(os.getpid(), signal.SIGTERM)
 

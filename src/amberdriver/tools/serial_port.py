@@ -12,7 +12,7 @@ class SerialPort(object):
     def close(self):
         self.__port.close()
 
-    def flush(self):
+    def reset_port(self):
         result = ''
         flushing = True
 
@@ -38,7 +38,6 @@ class SerialPort(object):
 
     def write(self, char):
         self.__port.write(char)
-        self.__port.flush()
 
     def send_command(self, address, command):
         self.write_byte(address)
@@ -46,55 +45,40 @@ class SerialPort(object):
 
     def read_byte(self):
         res = self.__port.read(1)
-        if res == '':
-            self.__port.flushInput()
-            res = self.__port.read(1)
         if len(res) == 1:
             val = struct.unpack('>B', res)
             self.__checksum = (val[0] + self.__checksum) & 0xFF
             return val[0]
-        raise Exception('No byte read')
+        return None
 
     def read_sbyte(self):
         res = self.__port.read(1)
-        if res == '':
-            self.__port.flushInput()
-            res = self.__port.read(1)
         if len(res) == 1:
             val = struct.unpack('>b', res)
             self.__checksum = (val[0] + self.__checksum) & 0xFF
             return val[0]
-        raise Exception('No signed-byte read')
+        return None
 
     def read_word(self):
         res = self.__port.read(2)
-        if res == '':
-            self.__port.flushInput()
-            res = self.__port.read(2)
         if len(res) == 2:
             val = struct.unpack('>H', res)
             self.__checksum = (val[0] + self.__checksum) & 0xFF
             self.__checksum = ((val[0] >> 8) + self.__checksum) & 0xFF
             return val[0]
-        raise Exception('No word read')
+        return None
 
     def read_sword(self):
         res = self.__port.read(2)
-        if res == '':
-            self.__port.flushInput()
-            res = self.__port.read(2)
         if len(res) == 2:
             val = struct.unpack('>h', res)
             self.__checksum = (val[0] + self.__checksum) & 0xFF
             self.__checksum = ((val[0] >> 8) + self.__checksum) & 0xFF
             return val[0]
-        raise Exception('No signed-word read')
+        return None
 
     def read_long(self):
         res = self.__port.read(4)
-        if res == '':
-            self.__port.flushInput()
-            res = self.__port.read(4)
         if len(res) == 4:
             val = struct.unpack('>L', res)
             self.__checksum = (val[0] + self.__checksum) & 0xFF
@@ -102,13 +86,10 @@ class SerialPort(object):
             self.__checksum = ((val[0] >> 16) + self.__checksum) & 0xFF
             self.__checksum = ((val[0] >> 24) + self.__checksum) & 0xFF
             return val[0]
-        raise Exception('No long read')
+        return None
 
     def read_slong(self):
         res = self.__port.read(4)
-        if res == '':
-            self.__port.flushInput()
-            res = self.__port.read(4)
         if len(res) == 4:
             val = struct.unpack('>l', res)
             self.__checksum = (val[0] + self.__checksum) & 0xFF
@@ -116,54 +97,36 @@ class SerialPort(object):
             self.__checksum = ((val[0] >> 16) + self.__checksum) & 0xFF
             self.__checksum = ((val[0] >> 24) + self.__checksum) & 0xFF
             return val[0]
-        raise Exception('No signed-long read')
+        return None
 
     def write_byte(self, val):
         self.__checksum = (val + self.__checksum) & 0xFF
-        try:
-            return self.__port.write(struct.pack('>B', val))
-        finally:
-            self.__port.flush()
+        return self.__port.write(struct.pack('>B', val))
 
     def write_sbyte(self, val):
         self.__checksum = (val + self.__checksum) & 0xFF
-        try:
-            return self.__port.write(struct.pack('>b', val))
-        finally:
-            self.__port.flush()
+        return self.__port.write(struct.pack('>b', val))
 
     def write_word(self, val):
         self.__checksum = (val + self.__checksum) & 0xFF
         self.__checksum = ((val >> 8) + self.__checksum) & 0xFF
-        try:
-            return self.__port.write(struct.pack('>H', val))
-        finally:
-            self.__port.flush()
+        return self.__port.write(struct.pack('>H', val))
 
     def write_sword(self, val):
         self.__checksum = (val + self.__checksum) & 0xFF
         self.__checksum = ((val >> 8) + self.__checksum) & 0xFF
-        try:
-            return self.__port.write(struct.pack('>h', val))
-        finally:
-            self.__port.flush()
+        return self.__port.write(struct.pack('>h', val))
 
     def write_long(self, val):
         self.__checksum = (val + self.__checksum) & 0xFF
         self.__checksum = ((val >> 8) + self.__checksum) & 0xFF
         self.__checksum = ((val >> 16) + self.__checksum) & 0xFF
         self.__checksum = ((val >> 24) + self.__checksum) & 0xFF
-        try:
-            return self.__port.write(struct.pack('>L', val))
-        finally:
-            self.__port.flush()
+        return self.__port.write(struct.pack('>L', val))
 
     def write_slong(self, val):
         self.__checksum = (val + self.__checksum) & 0xFF
         self.__checksum = ((val >> 8) + self.__checksum) & 0xFF
         self.__checksum = ((val >> 16) + self.__checksum) & 0xFF
         self.__checksum = ((val >> 24) + self.__checksum) & 0xFF
-        try:
-            return self.__port.write(struct.pack('>l', val))
-        finally:
-            self.__port.flush()
+        return self.__port.write(struct.pack('>l', val))

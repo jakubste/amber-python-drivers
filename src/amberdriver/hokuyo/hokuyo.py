@@ -69,7 +69,7 @@ class Hokuyo(object):
         self.__port_lock.acquire()
         try:
             self.__port.write('QT\nRS\nQT\n')
-            self.__port.flush()
+            self.__port.reset_port()
 
         finally:
             self.__port_lock.release()

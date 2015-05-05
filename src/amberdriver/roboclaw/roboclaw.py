@@ -55,7 +55,7 @@ class Roboclaw(object):
         self.__port_lock.acquire()
         try:
             self.drive_mixed_with_signed_duty_cycle(0, 0)
-            self.__port.flush()
+            self.__port.reset_port()
 
         finally:
             self.__port_lock.release()

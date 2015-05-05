@@ -1116,8 +1116,9 @@ class RoboclawDriver(object):
             front_error_status, rear_error_status = self.__get_error_codes()
 
             if front_error_status > 0 or rear_error_status > 0:
-                self.__logger.warn('Error: front: %f, rear: %f', front_error_status, rear_error_status)
+                self.__logger.warn('Error: front: %f, rear: %f, reset!', front_error_status, rear_error_status)
                 self.__red_led(True)
+                self.__reset()
 
                 if front_error_status == 0x20 or rear_error_status == 0x20:
                     self.__driving_allowed = False

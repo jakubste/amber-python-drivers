@@ -46,7 +46,7 @@ class Roboclaw(object):
 
         runtime.add_shutdown_hook(self.terminate)
 
-    def flush(self):
+    def reset_port(self):
         self.__port_lock.acquire()
         try:
             self.drive_mixed_with_signed_duty_cycle(0, 0)
@@ -55,10 +55,13 @@ class Roboclaw(object):
         finally:
             self.__port_lock.release()
 
+    def flush(self):
+        self.__port.flush()
+
     def terminate(self):
         self.__port_lock.acquire()
         try:
-            self.flush()
+            self.reset_port()
             self.__port.close()
 
         finally:
@@ -1006,10 +1009,10 @@ class RoboclawDriver(object):
         self.__roboclaw_lock.acquire()
         try:
             self.__green_led(False)
-            self.__front.drive_m1_with_signed_speed(front_right)
-            self.__front.drive_m2_with_signed_speed(front_left)
-            self.__rear.drive_m1_with_signed_speed(rear_right)
-            self.__rear.drive_m2_with_signed_speed(rear_left)
+            self.__front.drive_mixed_with_signed_speed(front_right, front_left)
+            self.__front.flush()
+            self.__rear.drive_mixed_with_signed_speed(rear_right, rear_left)
+            self.__rear.flush()
             self.__green_led(True)
         finally:
             self.__roboclaw_lock.release()
@@ -1035,8 +1038,8 @@ class RoboclawDriver(object):
             self.__reset_gpio.write('1')
             self.__reset_gpio.flush()
             time.sleep(RESET_DELAY / 1000.0)
-            self.__front.flush()
-            self.__rear.flush()
+            self.__front.reset_port()
+            self.__rear.reset_port()
             self.__setup()
             self.__driving_allowed = True
         finally:

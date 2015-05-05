@@ -65,7 +65,7 @@ class Hokuyo(object):
 
         runtime.add_shutdown_hook(self.terminate)
 
-    def flush(self):
+    def reset_port(self):
         self.__port_lock.acquire()
         try:
             self.__port.write('QT\nRS\nQT\n')
@@ -74,10 +74,13 @@ class Hokuyo(object):
         finally:
             self.__port_lock.release()
 
+    def flush(self):
+        self.__port.flush()
+
     def terminate(self):
         self.__port_lock.acquire()
         try:
-            self.flush()
+            self.reset_port()
             self.__port.close()
 
         finally:
@@ -336,7 +339,7 @@ class HokuyoDriver(object):
     def __reset(self):
         self.__hokuyo_lock.acquire()
         try:
-            self.__scanner.flush()
+            self.__scanner.reset_port()
             self.__setup()
         finally:
             self.__hokuyo_lock.release()

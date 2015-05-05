@@ -39,6 +39,9 @@ class SerialPort(object):
     def write(self, char):
         self.__port.write(char)
 
+    def flush(self):
+        self.__port.flush()
+
     def send_command(self, address, command):
         self.write_byte(address)
         self.write_byte(command)

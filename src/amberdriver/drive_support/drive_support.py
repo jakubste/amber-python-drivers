@@ -74,7 +74,7 @@ class DriveSupport(object):
 
     def set_motion(self, motion):
         self.__motion = motion
-        self.__motion_ts = time.time()
+        self.__motion_ts = int(time.time() * 1000.0)
 
     def set_speeds(self, front_left, front_right, rear_left, rear_right):
         fl, fr, rl, rr = front_left, front_right, rear_left, rear_right
@@ -87,7 +87,7 @@ class DriveSupport(object):
     def measure_loop(self):
         while self.__is_active:
             self.__measured_speed = self.__roboclaw_driver.get_measured_speeds()
-            self.__measure_ts = time.time()
+            self.__measure_ts = int(time.time() * 1000.0)
             time.sleep(0.1)
 
     def __drive_support(self, fl, fr, rl, rr):

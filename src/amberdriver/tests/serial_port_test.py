@@ -67,8 +67,7 @@ class ReadByteTestCase(SerialPortTestCase):
             checksum = (result & 0xFF) & 0x7F
             self.assertEqual(self.port.get_checksum(), checksum)
             self.mocked_serial_port.read = mock.Mock(return_value=str())
-            with self.assertRaises(Exception) as cm:
-                self.port.read_byte()
+            self.assertIsNone(self.port.read_byte())
 
 
 class ReadSignedByteTestCase(SerialPortTestCase):
@@ -85,8 +84,7 @@ class ReadSignedByteTestCase(SerialPortTestCase):
             checksum = (result & 0xFF) & 0x7F
             self.assertEqual(self.port.get_checksum(), checksum)
             self.mocked_serial_port.read = mock.Mock(return_value=str())
-            with self.assertRaises(Exception) as _:
-                self.port.read_sbyte()
+            self.assertIsNone(self.port.read_sbyte())
 
 
 class ReadWordTestCase(SerialPortTestCase):
@@ -103,8 +101,7 @@ class ReadWordTestCase(SerialPortTestCase):
             checksum = ((result & 0XFF) + ((result >> 8) & 0xFF)) & 0x7F
             self.assertEqual(self.port.get_checksum(), checksum)
             self.mocked_serial_port.read = mock.Mock(return_value=str())
-            with self.assertRaises(Exception) as _:
-                self.port.read_word()
+            self.assertIsNone(self.port.read_word())
 
 
 class ReadSignedWordTestCase(SerialPortTestCase):
@@ -122,8 +119,7 @@ class ReadSignedWordTestCase(SerialPortTestCase):
             checksum = ((result & 0xFF) + ((result >> 8) & 0xFF)) & 0x7F
             self.assertEqual(self.port.get_checksum(), checksum)
             self.mocked_serial_port.read = mock.Mock(return_value=str())
-            with self.assertRaises(Exception) as _:
-                self.port.read_sword()
+            self.assertIsNone(self.port.read_sword())
 
 
 class ReadLongTestCase(SerialPortTestCase):
@@ -141,8 +137,7 @@ class ReadLongTestCase(SerialPortTestCase):
                         ((result >> 16) & 0xFF) + ((result >> 24) & 0xFF)) & 0x7F
             self.assertEqual(self.port.get_checksum(), checksum)
             self.mocked_serial_port.read = mock.Mock(return_value=str())
-            with self.assertRaises(Exception) as _:
-                self.port.read_long()
+            self.assertIsNone(self.port.read_long())
 
 
 class ReadSignedLongTestCase(SerialPortTestCase):
@@ -160,8 +155,7 @@ class ReadSignedLongTestCase(SerialPortTestCase):
                         ((result >> 16) & 0xFF) + ((result >> 24) & 0xFF)) & 0x7F
             self.assertEqual(self.port.get_checksum(), checksum)
             self.mocked_serial_port.read = mock.Mock(return_value=str())
-            with self.assertRaises(Exception) as _:
-                self.port.read_slong()
+            self.assertIsNone(self.port.read_slong())
 
 
 class WriteByteTestCase(SerialPortTestCase):

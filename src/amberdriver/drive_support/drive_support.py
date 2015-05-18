@@ -160,7 +160,7 @@ class DriveSupport(object):
             self.__radius_computed_from_motion = radius * 1000.0
         else:
             self.__speed_computed_from_motion = 0.0
-            self.__radius_computed_from_motion = None
+            self.__radius_computed_from_motion = 0.0
 
     def measure_loop(self):
         while self.__is_active:
@@ -238,7 +238,7 @@ def compute_speed_radius(speeds):
     if abs(speed_left - speed_right) > 0.0:
         radius = speed_right * ROBO_WIDTH / (speed_left - speed_right) + (ROBO_WIDTH / 2.0)
     else:
-        radius = None
+        radius = 0.0
 
     return speed, radius
 

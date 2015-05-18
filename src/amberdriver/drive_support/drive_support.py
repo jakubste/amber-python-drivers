@@ -143,8 +143,8 @@ class DriveSupport(object):
         # Filter (?) and create object
         self.__scan = Scan(points)
 
-        self.__speed_limits = drive_support_logic.compute_speed_limits(scan)
-        self.__environmental_forces = drive_support_logic.compute_environmental_forces(scan)
+        self.__speed_limits = drive_support_logic.compute_speed_limits(self.__scan)
+        self.__environmental_forces = drive_support_logic.compute_environmental_forces(self.__scan)
 
     def set_motion(self, motion):
         accel_forward, accel_side, speed_rotational = get_motion_data(motion)

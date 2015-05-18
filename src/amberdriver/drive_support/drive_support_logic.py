@@ -142,7 +142,7 @@ def compute_speed_limits(map_polar,
 def distance_to_force(distance, angle, angle_offset=0.0,
                       distance_function=lambda d: d,
                       angle_function=lambda a: a):
-    return angle_function(angle_function) * distance_function(distance)
+    return angle_function(angle) * distance_function(distance)
 
 
 def compute_environmental_forces(map_polar,

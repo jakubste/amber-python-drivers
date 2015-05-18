@@ -3,6 +3,7 @@ import logging.config
 import time
 
 import os
+
 from amberclient.common.listener import Listener
 
 from ambercommon.common import runtime
@@ -92,6 +93,8 @@ class DriveSupport(object):
         self.__power = None
         self.__user_speeds = None
 
+        self.__last_user_speeds_cmd_ts = 0.0
+
         self.__motion_filter = LowPassFilter(0.3, 0.0, 0.0, 0.0)
         self.__speeds_filter = LowPassFilter(0.45, 0.0, 0.0, 0.0, 0.0)
         self.__power_filter = LowPassFilter(0.2, 0.0, 0.0)
@@ -108,7 +111,6 @@ class DriveSupport(object):
 
         self.__speed_limits = None
         self.__environmental_forces = None
-        self.__current_environment_map = None
 
         self.__roboclaw_driver = roboclaw_driver
 
@@ -136,23 +138,29 @@ class DriveSupport(object):
         self.__roboclaw_driver.stop()
 
     def set_scan(self, scan):
+        points = scan.get_points()
+
         # Filter (?) and create object
-        self.__scan = Scan(scan.get_points())
+        self.__scan = Scan(points)
 
         self.__speed_limits = drive_support_logic.compute_speed_limits(scan)
         self.__environmental_forces = drive_support_logic.compute_environmental_forces(scan)
-        self.__current_environment_map = drive_support_logic.convert_map_polar_to_grid(scan)
 
     def set_motion(self, motion):
         accel_forward, accel_side, speed_rotational = get_motion_data(motion)
         # Filter and create object
         accel_forward, accel_side, speed_rotational = self.__motion_filter(accel_forward, accel_side, speed_rotational)
         self.__motion = Motion(accel_forward, accel_side, speed_rotational)
+
         # Compute forward speed and turn radius
-        speed = self.__motion.accel_side / self.__motion.speed_rotational
-        radius = speed / self.__motion.speed_rotational
-        self.__speed_computed_from_motion = speed
-        self.__radius_computed_from_motion = radius
+        if self.__motion.speed_rotational > 0.0 or self.__motion.speed_rotational < 0.0:
+            speed = self.__motion.accel_side / self.__motion.speed_rotational
+            radius = speed / self.__motion.speed_rotational
+            self.__speed_computed_from_motion = speed * 1000.0
+            self.__radius_computed_from_motion = radius * 1000.0
+        else:
+            self.__speed_computed_from_motion = 0.0
+            self.__radius_computed_from_motion = None
 
     def measure_loop(self):
         while self.__is_active:
@@ -183,6 +191,11 @@ class DriveSupport(object):
 
     def set_speeds(self, front_left, front_right, rear_left, rear_right):
         current_timestamp = time.time()
+        if current_timestamp - self.__last_user_speeds_cmd_ts < 0.07:
+            self.__logger.warn('New speed command to fast, skip...')
+            return
+        self.__last_user_speeds_cmd_ts = current_timestamp
+
         # Filter and create object
         speeds = front_left, front_right, rear_left, rear_right
         speeds = self.__user_speeds_filter(*speeds)
@@ -191,13 +204,17 @@ class DriveSupport(object):
         # detect if oscillation exists
         # reduce speed due to environment
         # filter data
-        speeds = Speed(*self.__user_speeds(*speeds))
         speed, radius = compute_speed_radius(speeds)
 
-        sd1 = self.__speed_computed_from_motion - speed
-        sd2 = self.__speed_computed_from_measurement - speed
+        sd1 = speed - self.__speed_computed_from_motion
+        sd2 = speed - self.__speed_computed_from_measurement
         rd1 = self.__radius_computed_from_motion - radius
         rd2 = self.__radius_computed_from_measurement - radius
+
+        speed_diff = average(sd1, sd2)
+        speeds = map(lambda val: val + speed_diff, speeds)
+
+        radius_diff = average(rd1, rd2)
 
         trust_level = drive_support_logic.data_trust(self.__scan.timestamp / 1000.0, current_timestamp) * \
                       drive_support_logic.data_trust(self.__motion.timestamp / 1000.0, current_timestamp) * \
@@ -218,7 +235,10 @@ def compute_speed_radius(speeds):
     speed_front_rear = average(speed_front, speed_rear)
 
     speed = average(speed_left_right, speed_front_rear)
-    radius = speed_left * ROBO_WIDTH / (speed_left - speed_right)
+    if abs(speed_left - speed_right) > 0.0:
+        radius = speed_right * ROBO_WIDTH / (speed_left - speed_right) + (ROBO_WIDTH / 2.0)
+    else:
+        radius = None
 
     return speed, radius
 

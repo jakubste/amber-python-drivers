@@ -989,7 +989,7 @@ class RoboclawDriver(object):
                               rear_left_current, rear_right_current)
             voltage = average(front_voltage, rear_voltage)
 
-            return current, voltage
+            return current / 100.0, voltage / 100.0
 
         finally:
             self.__roboclaw_lock.release()

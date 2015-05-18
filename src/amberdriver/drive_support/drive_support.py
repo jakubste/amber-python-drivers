@@ -1,6 +1,7 @@
 import logging
 import logging.config
 import time
+import math
 
 import os
 
@@ -79,10 +80,14 @@ def get_motion_data(motion):
     gyro = motion.get_gyro()
 
     # getting data from motion sensor specific for installation
-    acc_forward, acc_side, = accel.x_axis, accel.y_axis
-    speed_rotational = gyro.z_axis
+    acc_forward, acc_side, = (accel.y_axis + 45.0) / 100.0, (accel.x_axis + 60.0) / 100.0
+    speed_rotational = math.radians(gyro.z_axis)
 
     return acc_forward, acc_side, speed_rotational
+
+
+def get_current_voltage_data(data):
+    pass
 
 
 class DriveSupport(object):
@@ -212,8 +217,6 @@ class DriveSupport(object):
         rd2 = self.__radius_computed_from_measurement - radius
 
         speed_diff = average(sd1, sd2)
-        speeds = map(lambda val: val + speed_diff, speeds)
-
         radius_diff = average(rd1, rd2)
 
         trust_level = drive_support_logic.data_trust(self.__scan.timestamp / 1000.0, current_timestamp) * \

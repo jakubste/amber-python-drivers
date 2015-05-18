@@ -180,7 +180,7 @@ class DriveSupport(object):
             # detect changes on current and voltage
 
             # Compute forward speed and turn radius
-            speed, radius = compute_speed_radius(speeds)
+            speed, radius = compute_speed_radius(self.__speeds)
             self.__speed_computed_from_measurement = speed
             self.__radius_computed_from_measurement = radius
 

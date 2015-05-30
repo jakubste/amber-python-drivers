@@ -3,10 +3,9 @@ import logging.config
 import threading
 import time
 import math
+
 import traceback
-
 import os
-
 from ambercommon.common import runtime
 
 from amberclient.common.listener import Listener
@@ -40,23 +39,6 @@ def compute_sleep_interval(current_timestamp, last_timestamp, sleep_interval,
     return sleep_interval
 
 
-class Map(object):
-    def __init__(self):
-        pass
-
-    def add(self, x, y):
-        pass
-
-    def refresh(self):
-        pass
-
-    def flush(self):
-        pass
-
-    def exists(self, x, y):
-        pass
-
-
 class ScanHandler(Listener):
     def __init__(self, driver):
         self.__drive_support = driver
@@ -84,7 +66,7 @@ class DriveToPoint(object):
         self.__is_active = True
         self.__driving_allowed = False
 
-        self.__old_left, self.__old_right = 0.0, 0.0
+        self.__speeds_filter = drive_support_logic.LowPassFilter(0.5, 0.0, 0.0)
         self.__logger = logging.getLogger(LOGGER_NAME)
 
         runtime.add_shutdown_hook(self.stop)
@@ -102,8 +84,8 @@ class DriveToPoint(object):
             self.__next_targets_timestamp = time.time()
             self.__driving_allowed = len(targets) > 0
             self.__visited_targets = []
-            self.__targets_lock.notify_all()
         finally:
+            self.__targets_lock.notify_all()
             self.__targets_lock.release()
 
     def get_next_targets_and_location(self):
@@ -212,7 +194,7 @@ class DriveToPoint(object):
             * drive to (temporary) destination
             """
 
-            left, right = self.__low_pass(left, right)
+            left, right = self.__speeds_filter(left, right)
             left, right = int(left), int(right)
             self.__driver_proxy.send_motors_command(left, right, left, right)
 
@@ -241,11 +223,6 @@ class DriveToPoint(object):
 
     def __stop(self):
         self.__driver_proxy.send_motors_command(0, 0, 0, 0)
-
-    def __low_pass(self, left, right):
-        self.__old_left += 0.5 * (left - self.__old_left)
-        self.__old_right += 0.5 * (right - self.__old_right)
-        return self.__old_left, self.__old_right
 
     @staticmethod
     def target_reached(location, target):

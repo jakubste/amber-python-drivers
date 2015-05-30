@@ -1,7 +1,6 @@
 import logging
 import logging.config
 import time
-import math
 
 import os
 
@@ -9,8 +8,7 @@ from amberclient.common.listener import Listener
 
 from ambercommon.common import runtime
 
-from amberdriver.drive_support import drive_support_logic
-from amberdriver.drive_support.drive_support_logic import LowPassFilter, Accumulator, average
+from amberdriver.drive_support.drive_support_logic import average, Speed
 from amberdriver.tools import config
 
 
@@ -41,82 +39,8 @@ class MotionHandler(Listener):
         self.__drive_support.set_motion(response)
 
 
-class Scan(object):
-    def __init__(self, points):
-        self.points = points
-        self.timestamp = time.time() * 1000.0
-
-    def __iter__(self):
-        return iter(self.points)
-
-
-class Motion(object):
-    def __init__(self, acc_forward, acc_side, speed_rotational):
-        self.accel_forward = acc_forward
-        self.accel_side = acc_side
-        self.speed_rotational = speed_rotational
-        self.timestamp = time.time() * 1000.0
-
-
-class Power(object):
-    def __init__(self, current, voltage):
-        self.current = current
-        self.voltage = voltage
-        self.timestamp = time.time() * 1000.0
-
-
-class Speed(object):
-    def __init__(self, fl, fr, rl, rr):
-        self.front_left, self.front_right = fl, fr
-        self.rear_left, self.rear_right = rl, rr
-        self.timestamp = time.time() * 1000.0
-
-    def __iter__(self):
-        return iter((self.front_left, self.front_right, self.rear_left, self.rear_right))
-
-
-def get_motion_data(motion):
-    accel = motion.get_accel()
-    gyro = motion.get_gyro()
-
-    # getting data from motion sensor specific for installation
-    acc_forward, acc_side, = (accel.y_axis + 45.0) / 100.0, (accel.x_axis + 60.0) / 100.0
-    speed_rotational = math.radians(gyro.z_axis)
-
-    return acc_forward, acc_side, speed_rotational
-
-
-def get_current_voltage_data(data):
-    pass
-
-
 class DriveSupport(object):
     def __init__(self, roboclaw_driver, hokuyo_proxy, ninedof_proxy):
-        self.__scan = None
-        self.__motion = None
-        self.__speeds = None
-        self.__power = None
-        self.__user_speeds = None
-
-        self.__last_user_speeds_cmd_ts = 0.0
-
-        self.__motion_filter = LowPassFilter(0.3, 0.0, 0.0, 0.0)
-        self.__speeds_filter = LowPassFilter(0.45, 0.0, 0.0, 0.0, 0.0)
-        self.__power_filter = LowPassFilter(0.2, 0.0, 0.0)
-        self.__user_speeds_filter = LowPassFilter(0.3, 0.0, 0.0, 0.0, 0.0)
-
-        self.__current_accumulator = Accumulator()
-        self.__voltage_accumulator = Accumulator()
-
-        self.__speed_computed_from_motion = 0.0
-        self.__radius_computed_from_motion = 0.0
-
-        self.__speed_computed_from_measurement = 0.0
-        self.__radius_computed_from_measurement = 0.0
-
-        self.__speed_limits = None
-        self.__environmental_forces = None
-
         self.__roboclaw_driver = roboclaw_driver
 
         self.__is_active = True
@@ -143,89 +67,30 @@ class DriveSupport(object):
         self.__roboclaw_driver.stop()
 
     def set_scan(self, scan):
-        points = scan.get_points()
-
-        # Filter (?) and create object
-        self.__scan = Scan(points)
-
-        self.__speed_limits = drive_support_logic.compute_speed_limits(self.__scan)
-        self.__environmental_forces = drive_support_logic.compute_environmental_forces(self.__scan)
+        pass
 
     def set_motion(self, motion):
-        accel_forward, accel_side, speed_rotational = get_motion_data(motion)
-        # Filter and create object
-        accel_forward, accel_side, speed_rotational = self.__motion_filter(accel_forward, accel_side, speed_rotational)
-        self.__motion = Motion(accel_forward, accel_side, speed_rotational)
-
-        # Compute forward speed and turn radius
-        if self.__motion.speed_rotational > 0.0 or self.__motion.speed_rotational < 0.0:
-            speed = self.__motion.accel_side / self.__motion.speed_rotational
-            radius = speed / self.__motion.speed_rotational
-            self.__speed_computed_from_motion = speed * 1000.0
-            self.__radius_computed_from_motion = radius * 1000.0
-        else:
-            self.__speed_computed_from_motion = 0.0
-            self.__radius_computed_from_motion = 0.0
+        pass
 
     def measure_loop(self):
         while self.__is_active:
-            speeds = self.__roboclaw_driver.get_measured_speeds()
-            # Filter and create object
-            speeds = self.__speeds_filter(*speeds)
-            self.__speeds = Speed(*speeds)
-
-            current, voltage = self.__roboclaw_driver.get_current_and_voltage()
-            # Filter and create object
-            current, voltage = self.__power_filter(current, voltage)
-            self.__power = Power(current, voltage)
-
-            self.__current_accumulator.append(current)
-            self.__voltage_accumulator.append(voltage)
-
-            # detect changes on current and voltage
-
-            # Compute forward speed and turn radius
-            speed, radius = compute_speed_radius(self.__speeds)
-            self.__speed_computed_from_measurement = speed
-            self.__radius_computed_from_measurement = radius
-
+            speeds = self.__roboclaw_driver.get_speeds()
+            currents = self.__roboclaw_driver.get_currents()
+            voltages = self.__roboclaw_driver.get_voltages()
             time.sleep(0.1)
 
-    def get_measured_speeds(self):
-        return self.__speeds
+    def get_speeds(self):
+        return self.__roboclaw_driver.get_speeds()
 
     def set_speeds(self, front_left, front_right, rear_left, rear_right):
-        current_timestamp = time.time()
-        if current_timestamp - self.__last_user_speeds_cmd_ts < 0.07:
-            self.__logger.warn('New speed command to fast, skip...')
-            return
-        self.__last_user_speeds_cmd_ts = current_timestamp
-
-        # Filter and create object
-        speeds = front_left, front_right, rear_left, rear_right
-        speeds = self.__user_speeds_filter(*speeds)
-        speeds = Speed(*speeds)
-
-        # detect if oscillation exists
-        # reduce speed due to environment
+        # detect if oscillation in speeds exists
+        # detect if oscillation in measured speed exists
+        # reduce/change speed due to environment
         # filter data
-        speed, radius = compute_speed_radius(speeds)
 
-        sd1 = speed - self.__speed_computed_from_motion
-        sd2 = speed - self.__speed_computed_from_measurement
-        rd1 = self.__radius_computed_from_motion - radius
-        rd2 = self.__radius_computed_from_measurement - radius
-
-        speed_diff = average(sd1, sd2)
-        radius_diff = average(rd1, rd2)
-
-        trust_level = drive_support_logic.data_trust(self.__scan.timestamp / 1000.0, current_timestamp) * \
-                      drive_support_logic.data_trust(self.__motion.timestamp / 1000.0, current_timestamp) * \
-                      drive_support_logic.data_trust(self.__speeds.timestamp / 1000.0, current_timestamp) * \
-                      drive_support_logic.data_trust(self.__power.timestamp / 1000.0, current_timestamp)
-        speeds = map(lambda val: int(val * trust_level), speeds)
-
-        self.__roboclaw_driver.set_speeds(*speeds)
+        speeds = Speed(front_left, front_right, rear_left, rear_right)
+        self.__roboclaw_driver.set_speeds(speeds.speed_front_left, speeds.speed_front_right,
+                                          speeds.speed_rear_left, speeds.speed_rear_right)
 
 
 def compute_speed_radius(speeds):

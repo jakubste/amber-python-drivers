@@ -8,7 +8,6 @@ from ambercommon.common import runtime
 import os
 
 from amberdriver.drive_support.drive_support_logic import average
-
 from amberdriver.tools import config
 
 
@@ -989,12 +988,32 @@ class RoboclawDriver(object):
                               rear_left_current, rear_right_current)
             voltage = average(front_voltage, rear_voltage)
 
-            return current / 100.0, voltage / 100.0
-
+            return current / 10.0, voltage / 10.0
         finally:
             self.__roboclaw_lock.release()
 
-    def get_measured_speeds(self):
+    def get_currents(self):
+        self.__roboclaw_lock.acquire()
+        try:
+            front_right_current, front_left_current = self.__front.read_motor_currents()
+            rear_right_current, rear_left_current = self.__rear.read_motor_currents()
+
+            return (front_right_current / 10.0, front_left_current / 10.0,
+                    rear_right_current / 10.0, rear_left_current / 10.0)
+        finally:
+            self.__roboclaw_lock.release()
+
+    def get_voltages(self):
+        self.__roboclaw_lock.acquire()
+        try:
+            front_voltage = self.__front.read_main_battery_voltage_level()
+            rear_voltage = self.__rear.read_main_battery_voltage_level()
+
+            return front_voltage / 10.0, rear_voltage / 10.0
+        finally:
+            self.__roboclaw_lock.release()
+
+    def get_speeds(self):
         if not self.__driving_allowed:
             return 0, 0, 0, 0
 

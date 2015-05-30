@@ -234,7 +234,7 @@ class SpeedsAnalyzer(object):
         self.__rear_right = LowPassFilter(0.9, 0.0)
 
     @staticmethod
-    def get_speed_data(speeds):
+    def get_speeds_data(speeds):
         front_left, front_right, rear_left, rear_right = speeds
         return Speed(front_left, front_right, rear_left, rear_right)
 
@@ -269,7 +269,7 @@ class SpeedsAnalyzer(object):
             speeds.rotational_speed = 0.0
 
     def __call__(self, speeds):
-        speeds = self.get_speed_data(speeds)
+        speeds = self.get_speeds_data(speeds)
         self.filter_speeds(speeds)
         self.compute_linear_speeds(speeds)
         self.compute_rotational_speed(speeds)
@@ -281,8 +281,8 @@ class MotionAnalyzer(object):
         self.__gravity_alpha = 0.8
         self.__gravity_forward, self.__gravity_side = 0.0, 0.0
 
-        self.__acceleration_forward_filter = LowPassFilter(0.7, 0.0)
-        self.__acceleration_side_filter = LowPassFilter(0.7, 0.0)
+        self.__acceleration_forward_filter = LowPassFilter(0.3, 0.0)
+        self.__acceleration_side_filter = LowPassFilter(0.3, 0.0)
         self.__speed_rotational_filter = LowPassFilter(0.7, 0.0)
 
     @staticmethod
@@ -290,7 +290,7 @@ class MotionAnalyzer(object):
         accel = motion.get_accel()
         gyro = motion.get_gyro()
 
-        acceleration_forward, acceleration_side, = accel.y_axis * 10.0, accel.x_axis * 10.0
+        acceleration_forward, acceleration_side, = accel.y_axis / 10.0, accel.x_axis / 10.0
         speed_rotational = math.radians(gyro.z_axis)
 
         return Motion(acceleration_forward, acceleration_side, speed_rotational)
@@ -334,20 +334,24 @@ class VoltagesAnalyzer(object):
         self.__voltage_rear_filter = LowPassFilter(0.8, 0.0)
 
     @staticmethod
-    def get_voltage_data(voltage):
-        voltage_front, voltage_rear = voltage
+    def get_voltages_data(voltages):
+        voltage_front, voltage_rear = voltages
         return Voltage(voltage_front, voltage_rear)
 
-    def filter_voltage(self, voltage):
-        if 12.0 < voltage.voltage_front < 18.0:
-            voltage.voltage_front = self.__voltage_front_filter(voltage.voltage_front)
-        if 12.0 < voltage.voltage_rear < 18.0:
-            voltage.voltage_rear = self.__voltage_rear_filter(voltage.voltage_rear)
+    def filter_voltages(self, voltages):
+        if 12.0 < voltages.voltage_front < 18.0:
+            voltages.voltage_front = self.__voltage_front_filter(voltages.voltage_front)
+        if 12.0 < voltages.voltage_rear < 18.0:
+            voltages.voltage_rear = self.__voltage_rear_filter(voltages.voltage_rear)
 
-    def __call__(self, voltage):
-        voltage = self.get_voltage_data(voltage)
-        self.filter_voltage(voltage)
-        return voltage
+    @staticmethod
+    def compute_voltages(voltages):
+        voltages.voltage = average(voltages.voltage_front, voltages.voltage_rear)
+
+    def __call__(self, voltages):
+        voltages = self.get_voltages_data(voltages)
+        self.filter_voltages(voltages)
+        return voltages
 
 
 class ScanAnalyzer(object):
@@ -383,21 +387,40 @@ class Limiter(object):
         scan = self.__scan
         if scan is not None:
             # speeds depends on distance to obstacle in 0 deg angle
-            pass
+            factor_cosines = 0.0
+            factor_gauss = 0.0
+            weights_cosines = 0.0
+            weights_gauss = 0.0
+            for angle, distance in scan.points:
+                w_c = math.cos(3.0 / 4.0 * angle)
+                w_g = math.pow(2.0 * math.pi, -0.5) * math.exp(-math.pow(angle, 2.0) / 2.0) / 0.4
+                weights_cosines += w_c
+                weights_gauss += w_g
+                if 10.0 < distance < 1200.0:
+                    factor_cosines += w_c * (distance / 1200.0)
+                    factor_gauss += w_g * (distance / 1200.0)
+                else:
+                    factor_cosines += w_c
+                    factor_gauss += w_g
+            factor_cosines = factor_cosines / weights_cosines
+            factor_gauss = factor_gauss / weights_gauss
+            speeds.distance_factor = 0.4 * factor_cosines + 0.6 * factor_gauss
 
     def limit_speed_due_to_motion(self, speeds):
         motion = self.__motion
         if motion is not None:
-            # value of forward acceleration could not be higher than 2.5 m/s
-            # value of side acceleration could not be higher than 1.5 m/s
-            # value of rotational speed could not be higher than 1.8 rad/s in radius 1 m
-            pass
+            # value of forward acceleration could not be higher than 20 dm/s2
+            # value of side acceleration could not be higher than 15 dm/s2
+            speeds.acceleration_factor = (1 - abs(motion.acceleration_forward) / 20.0) * \
+                                         (1 - abs(motion.acceleration_side) / 15.0)
+            # value of rotational speed could not be higher than 1.8 rad/s
+            speeds.rotational_factor = (1 - abs(motion.speed_rotational) / 1.8)
 
     def limit_speed_due_to_voltage(self, speeds):
         voltages = self.__voltages
         if voltages is not None:
             # value between 14.0 and 16.0 V, could not be lower than 14.0 V
-            pass
+            speeds.voltage_factor = ((voltages.voltage - 14.0) / 2.0) if voltages.voltage < 16.0 else 1.0
 
     def __call__(self, speeds):
         # detect if oscillation in speeds exists
@@ -406,6 +429,12 @@ class Limiter(object):
         self.limit_speed_due_to_voltage(speeds)
         self.limit_speed_due_to_motion(speeds)
         # apply changes to speeds
+        factor = 0.4 * speeds.voltage_factor + \
+                 0.7 * speeds.rotational_factor + \
+                 0.5 * speeds.acceleration_factor + \
+                 0.9 * speeds.distance_factor
+        factor /= 2.5
+        speeds.speed_front_left *= factor
 
     def update_scan(self, scan):
         self.__scan = scan

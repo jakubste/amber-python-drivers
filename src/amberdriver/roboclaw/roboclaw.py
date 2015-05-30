@@ -7,7 +7,6 @@ import math
 from ambercommon.common import runtime
 import os
 
-from amberdriver.drive_support.drive_support_logic import average
 from amberdriver.tools import config
 
 
@@ -23,7 +22,6 @@ PULSES_PER_REVOLUTION = float(config.ROBOCLAW_PULSES_PER_REVOLUTION)
 STOP_IDLE_TIMEOUT = float(config.ROBOCLAW_STOP_IDLE_TIMEOUT)
 RESET_IDLE_TIMEOUT = float(config.ROBOCLAW_RESET_IDLE_TIMEOUT)
 
-BATTERY_MONITOR_INTERVAL = float(config.ROBOCLAW_BATTERY_MONITOR_INTERVAL)
 ERROR_MONITOR_INTERVAL = float(config.ROBOCLAW_ERROR_MONITOR_INTERVAL)
 CRITICAL_READ_REPEATS = int(config.ROBOCLAW_CRITICAL_READ_REPEATS)
 
@@ -31,10 +29,6 @@ RESET_DELAY = float(config.ROBOCLAW_RESET_DELAY)
 RESET_GPIO_PATH = str(config.ROBOCLAW_RESET_GPIO_PATH)
 LED1_GPIO_PATH = str(config.ROBOCLAW_LED1_GPIO_PATH)
 LED2_GPIO_PATH = str(config.ROBOCLAW_LED2_GPIO_PATH)
-
-TEMPERATURE_MONITOR_INTERVAL = float(config.ROBOCLAW_TEMPERATURE_MONITOR_INTERVAL)
-TEMPERATURE_CRITICAL = float(config.ROBOCLAW_TEMPERATURE_CRITICAL)
-TEMPERATURE_DROP = float(config.ROBOCLAW_TEMPERATURE_DROP)
 
 __author__ = 'paoolo'
 
@@ -975,22 +969,6 @@ class RoboclawDriver(object):
         self.__reset_gpio.close()
         self.__led1_gpio.close()
         self.__led2_gpio.close()
-
-    def get_current_and_voltage(self):
-        self.__roboclaw_lock.acquire()
-        try:
-            front_right_current, front_left_current = self.__front.read_motor_currents()
-            rear_right_current, rear_left_current = self.__rear.read_motor_currents()
-            front_voltage = self.__front.read_main_battery_voltage_level()
-            rear_voltage = self.__rear.read_main_battery_voltage_level()
-
-            current = average(front_left_current, front_right_current,
-                              rear_left_current, rear_right_current)
-            voltage = average(front_voltage, rear_voltage)
-
-            return current / 10.0, voltage / 10.0
-        finally:
-            self.__roboclaw_lock.release()
 
     def get_currents(self):
         self.__roboclaw_lock.acquire()

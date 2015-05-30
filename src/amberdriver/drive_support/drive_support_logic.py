@@ -262,7 +262,7 @@ class SpeedsAnalyzer(object):
     def compute_rotational_speed(speeds):
         if abs(speeds.speed_left - speeds.speed_right) > 0.0:
             speeds.radius = speeds.speed_right * ROBO_WIDTH / (speeds.speed_left - speeds.speed_right) + (
-            ROBO_WIDTH / 2.0)
+                ROBO_WIDTH / 2.0)
             speeds.rotational_speed = speeds.linear_speed / speeds.radius
         else:
             speeds.radius = 0.0
@@ -350,14 +350,6 @@ class VoltagesAnalyzer(object):
         return voltage
 
 
-class LocationAnalyzer(object):
-    def __init__(self):
-        pass
-
-    def __call__(self, location):
-        pass
-
-
 class ScanAnalyzer(object):
     def __init__(self):
         pass
@@ -367,7 +359,19 @@ class ScanAnalyzer(object):
         return Scan(points)
 
 
+class LocationAnalyzer(object):
+    def __init__(self):
+        pass
+
+    def __call__(self, location):
+        pass
+
+
 """ Mechanism """
+
+
+class Limiter(object):
+    pass
 
 
 class Mapper(object):

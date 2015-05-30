@@ -192,7 +192,7 @@ class LowPassFilter(object):
 
     def __call__(self, *args):
         self.__values = map(lambda (prev, curr): (prev + self.__alpha * (curr - prev)), zip(self.__values, args))
-        return self.__values
+        return self.__values[0] if len(self.__values) == 1 else self.__values
 
 
 class DelayFilter(object):
@@ -210,59 +210,6 @@ class DelayFilter(object):
         return None
 
 
-class Accumulator(list):
-    def __init__(self, values=list(), max_length=10):
-        super(Accumulator, self).__init__(values)
-        self.__max_length = max_length
-
-    def append(self, x):
-        super(Accumulator, self).append(x)
-        if len(self) > self.__max_length:
-            self.pop(0)
-
-    def average_diff(self):
-        return average(*self.diffs())
-
-    def diffs(self):
-        diffs = []
-        if len(self) > 1:
-            _prev = self[0]
-            for _next in self[1:]:
-                diffs.append(_next - _prev)
-                _prev = _next
-        return diffs
-
-
-class SpeedStabilizer(object):
-    def __init__(self, interval=0.1):
-        self.interval = interval
-        self.user_speeds, self.user_speeds_timestamp = None, 0.0
-        self.last_speeds, self.last_speeds_timestamp = None, None
-
-    def set_speeds(self, speeds):
-        if self.user_speeds is None:
-            self.user_speeds = speeds
-            self.user_speeds_timestamp = time.time()
-
-    def run(self):
-        while True:
-            if self.user_speeds is not None:
-                current_timestamp = time.time()
-                if self.last_speeds is not None:
-                    A = divide(subtract(self.user_speeds, self.last_speeds),
-                               subtract(self.user_speeds_timestamp, self.last_speeds_timestamp))
-                    B = subtract(self.user_speeds,
-                                 multiply(A, self.user_speeds_timestamp))
-                    current_speeds = add(multiply(A, current_timestamp), B)
-                else:
-                    current_speeds = self.user_speeds
-                self.last_speeds = current_speeds
-                self.last_speeds_timestamp = current_timestamp
-                self.user_speeds = None
-                # set current_speeds
-            time.sleep(self.interval)
-
-
 def round(value, granularity=0.25):
     new_value = int(value / granularity) * granularity
     if value - new_value >= granularity / 2.0:
@@ -276,45 +223,57 @@ def accel(A, B):
     return 0.0
 
 
+""" Data analyzer """
+
+
 class SpeedsAnalyzer(object):
     def __init__(self):
-        self.__front_left = LowPassFilter(0.2, 0.0)
-        self.__front_right = LowPassFilter(0.2, 0.0)
-        self.__rear_left = LowPassFilter(0.2, 0.0)
-        self.__rear_right = LowPassFilter(0.2, 0.0)
+        self.__front_left = LowPassFilter(0.9, 0.0)
+        self.__front_right = LowPassFilter(0.9, 0.0)
+        self.__rear_left = LowPassFilter(0.9, 0.0)
+        self.__rear_right = LowPassFilter(0.9, 0.0)
+
+    @staticmethod
+    def get_speed_data(speeds):
+        front_left, front_right, rear_left, rear_right = speeds
+        return Speed(front_left, front_right, rear_left, rear_right)
 
     def filter_speeds(self, speeds):
-        speeds.front_left = self.__front_left(speeds.front_left)
-        speeds.front_right = self.__front_right(speeds.front_right)
-        speeds.rear_left = self.__front_left(speeds.rear_left)
-        speeds.rear_right = self.__front_left(speeds.rear_right)
+        if 0 <= speeds.speed_front_left < 5000:
+            speeds.speed_front_left = self.__front_left(speeds.speed_front_left)
+        if 0 <= speeds.speed_front_right < 5000:
+            speeds.speed_front_right = self.__front_right(speeds.speed_front_right)
+        if 0 <= speeds.speed_rear_left < 5000:
+            speeds.speed_rear_left = self.__rear_left(speeds.speed_rear_left)
+        if 0 <= speeds.speed_rear_right < 5000:
+            speeds.speed_rear_right = self.__rear_right(speeds.speed_rear_right)
 
     @staticmethod
-    def compute_speeds(speeds):
-        speeds.left = average(speeds.front_left, speeds.rear_left)
-        speeds.right = average(speeds.front_right, speeds.rear_right)
-        speeds.front = average(speeds.front_left, speeds.front_right)
-        speeds.rear = average(speeds.rear_left, speeds.rear_right)
-
-    @staticmethod
-    def compute_speed_radius(speeds):
-        speed_left_right = average(speeds.left, speeds.right)
-        speed_front_rear = average(speeds.front, speeds.rear)
+    def compute_linear_speeds(speeds):
+        speeds.speed_left = average(speeds.speed_front_left, speeds.speed_rear_left)
+        speeds.speed_right = average(speeds.speed_front_right, speeds.speed_rear_right)
+        speeds.speed_front = average(speeds.speed_front_left, speeds.speed_front_right)
+        speeds.speed_rear = average(speeds.speed_rear_left, speeds.speed_rear_right)
+        speed_left_right = average(speeds.speed_left, speeds.speed_right)
+        speed_front_rear = average(speeds.speed_front, speeds.speed_rear)
         speeds.linear_speed = average(speed_left_right, speed_front_rear)
-        if abs(speeds.left - speeds.right) > 0.0:
-            speeds.radius = speeds.right * ROBO_WIDTH / (speeds.left - speeds.right) + (ROBO_WIDTH / 2.0)
+
+    @staticmethod
+    def compute_rotational_speed(speeds):
+        if abs(speeds.speed_left - speeds.speed_right) > 0.0:
+            speeds.radius = speeds.speed_right * ROBO_WIDTH / (speeds.speed_left - speeds.speed_right) + (
+            ROBO_WIDTH / 2.0)
             speeds.rotational_speed = speeds.linear_speed / speeds.radius
         else:
             speeds.radius = 0.0
             speeds.rotational_speed = 0.0
 
-    def compute_accel(self, speeds):
-        speeds.linear_accel = average(map(accel, zip(speeds, speeds[1:])))
-
-    def set_speeds(self, speeds):
+    def __call__(self, speeds):
+        speeds = self.get_speed_data(speeds)
         self.filter_speeds(speeds)
-        self.compute_speeds(speeds)
-        self.compute_speed_radius(speeds)
+        self.compute_linear_speeds(speeds)
+        self.compute_rotational_speed(speeds)
+        return speeds
 
 
 class MotionAnalyzer(object):
@@ -322,11 +281,9 @@ class MotionAnalyzer(object):
         self.__gravity_alpha = 0.8
         self.__gravity_forward, self.__gravity_side = 0.0, 0.0
 
-        self.__motion = None
-        self.__motion_filter = LowPassFilter(0.3, 0.0, 0.0, 0.0)
-
-        self.__speed_computed_from_motion = 0.0
-        self.__radius_computed_from_motion = 0.0
+        self.__acceleration_forward_filter = LowPassFilter(0.7, 0.0)
+        self.__acceleration_side_filter = LowPassFilter(0.7, 0.0)
+        self.__speed_rotational_filter = LowPassFilter(0.7, 0.0)
 
     @staticmethod
     def get_motion_data(motion):
@@ -336,62 +293,81 @@ class MotionAnalyzer(object):
         accel_forward, accel_side, = accel.y_axis / 100.0, accel.x_axis / 100.0
         speed_rotational = math.radians(gyro.z_axis)
 
-        return accel_forward, accel_side, speed_rotational
+        return Motion(accel_forward, accel_side, speed_rotational)
 
-    def compute_accel(self, accel_forward, accel_side):
+    def compute_motion(self, motion):
         self.__gravity_forward = self.__gravity_alpha * self.__gravity_forward + \
-                                 (1 - self.__gravity_alpha) * accel_forward
-        accel_forward -= self.__gravity_forward
+                                 (1 - self.__gravity_alpha) * motion.acceleration_forward
+        motion.acceleration_forward -= self.__gravity_forward
 
         self.__gravity_side = self.__gravity_alpha * self.__gravity_side + \
-                              (1 - self.__gravity_alpha) * accel_side
-        accel_side -= self.__gravity_side
+                              (1 - self.__gravity_alpha) * motion.acceleration_side
+        motion.acceleration_side -= self.__gravity_side
 
-        return accel_forward, accel_side
+    def filter_motion(self, motion):
+        motion.acceleration_forward = self.__acceleration_forward_filter(motion.acceleration_forward)
+        motion.acceleration_side = self.__acceleration_side_filter(motion.acceleration_side)
+        motion.speed_rotational = self.__speed_rotational_filter(motion.speed_rotational)
 
     @staticmethod
     def compute_speeds(motion):
-        if motion.speed_rotational > 0.0 or motion.speed_rotational < 0.0:
-            speed = motion.accel_side / motion.speed_rotational
+        if abs(motion.speed_rotational) > 0.0:
+            speed = motion.acceleration_side / motion.speed_rotational
             radius = speed / motion.speed_rotational
-            return speed * 1000.0, radius * 1000.0
-        return 0.0, 0.0
+            motion.speed_linear = speed * 1000.0
+            motion.radius = radius * 1000.0
+        else:
+            motion.speed_linear = 0.0
+            motion.radius = 0.0
 
-    def set_motion(self, motion):
-        accel_forward, accel_side, speed_rotational = MotionAnalyzer.get_motion_data(motion)
-        accel_forward, accel_side = self.compute_accel(accel_forward, accel_side)
-        accel_forward, accel_side, speed_rotational = self.__motion_filter(accel_forward, accel_side, speed_rotational)
-        motion = Motion(accel_forward, accel_side, speed_rotational)
-        MotionAnalyzer.compute_speeds(motion)
-        self.__motion = motion
+    def __call__(self, motion):
+        motion = self.get_motion_data(motion)
+        self.compute_motion(motion)
+        self.filter_motion(motion)
+        self.compute_speeds(motion)
+        return motion
 
 
-class PowerAnalyzer(object):
+class VoltagesAnalyzer(object):
     def __init__(self):
-        self.__voltages, self.__currents = Values(), Values()
+        self.__voltage_front_filter = LowPassFilter(0.8, 0.0)
+        self.__voltage_rear_filter = LowPassFilter(0.8, 0.0)
 
-    def set_power(self, power):
-        self.__voltages.append(power.voltages)
-        self.__currents.append(power.currents)
+    @staticmethod
+    def get_voltage_data(voltage):
+        voltage_front, voltage_rear = voltage
+        return Voltage(voltage_front, voltage_rear)
+
+    def filter_voltage(self, voltage):
+        if voltage.voltage_front > 0.0:
+            voltage.voltage_front = self.__voltage_front_filter(voltage.voltage_front)
+        if voltage.voltage_rear > 0.0:
+            voltage.voltage_rear = self.__voltage_rear_filter(voltage.voltage_rear)
+
+    def __call__(self, voltage):
+        voltage = self.get_voltage_data(voltage)
+        self.filter_voltage(voltage)
+        return voltage
 
 
 class LocationAnalyzer(object):
     def __init__(self):
-        self.__x, self.__y = Values(), Values()
-        self.__angle = Values()
+        pass
 
-    def set_location(self, location):
-        self.__x.append(location.x)
-        self.__y.append(location.y)
-        self.__angle.append(location.angle)
+    def __call__(self, location):
+        pass
 
 
 class ScanAnalyzer(object):
     def __init__(self):
         pass
 
-    def set_scan(self, scan):
-        pass
+    def __call__(self, scan):
+        points = scan.get_points()
+        return Scan(points)
+
+
+""" Mechanism """
 
 
 class Mapper(object):
@@ -461,8 +437,37 @@ class Locator(object):
         return Location(self.__relative_x, self.__relative_y, self.__relative_angle)
 
 
-class Driver(object):
-    pass
+class Stabilizer(object):
+    def __init__(self, interval=0.1):
+        self.interval = interval
+        self.user_speeds, self.user_speeds_timestamp = None, 0.0
+        self.last_speeds, self.last_speeds_timestamp = None, None
+
+    def set_speeds(self, speeds):
+        if self.user_speeds is None:
+            self.user_speeds = speeds
+            self.user_speeds_timestamp = time.time()
+
+    def run(self):
+        while True:
+            if self.user_speeds is not None:
+                current_timestamp = time.time()
+                if self.last_speeds is not None:
+                    A = divide(subtract(self.user_speeds, self.last_speeds),
+                               subtract(self.user_speeds_timestamp, self.last_speeds_timestamp))
+                    B = subtract(self.user_speeds,
+                                 multiply(A, self.user_speeds_timestamp))
+                    current_speeds = add(multiply(A, current_timestamp), B)
+                else:
+                    current_speeds = self.user_speeds
+                self.last_speeds = current_speeds
+                self.last_speeds_timestamp = current_timestamp
+                self.user_speeds = None
+                # set current_speeds
+            time.sleep(self.interval)
+
+
+""" Objects class """
 
 
 class Value():
@@ -475,6 +480,9 @@ class Scan(Value):
         Value.__init__(self)
         self.points = points
 
+    def __str__(self):
+        return 'scan: points: %s' % str(self.points)[:100]
+
 
 class Speed(Value):
     def __init__(self, front_left, front_right, rear_left, rear_right):
@@ -482,20 +490,22 @@ class Speed(Value):
         self.speed_front_left, self.speed_front_right = front_left, front_right
         self.speed_rear_left, self.speed_rear_right = rear_left, rear_right
 
+    def __str__(self):
+        return 'speed: front_left: %d, front_rear: %d, rear_left: %d, rear_right: %d' % \
+               (self.speed_front_left, self.speed_front_right,
+                self.speed_rear_left, self.speed_rear_right)
+
 
 class Motion(Value):
-    def __init__(self, acc_forward, acc_side, speed_rotational):
+    def __init__(self, acceleration_forward, acceleration_side, speed_rotational):
         Value.__init__(self)
-        self.accel_forward = acc_forward
-        self.accel_side = acc_side
+        self.acceleration_forward = acceleration_forward
+        self.acceleration_side = acceleration_side
         self.speed_rotational = speed_rotational
 
-
-class Current(Value):
-    def __init__(self, front_left, front_right, rear_left, rear_right):
-        Value.__init__(self)
-        self.current_front_left, self.current_front_right = front_left, front_right
-        self.current_rear_left, self.current_rear_right = rear_left, rear_right
+    def __str__(self):
+        return 'motion: acceleration_forward: %f, acceleration_side: %f, speed_rotational: %f' % \
+               (self.acceleration_forward, self.acceleration_side, self.speed_rotational)
 
 
 class Voltage(Value):
@@ -503,8 +513,14 @@ class Voltage(Value):
         Value.__init__(self)
         self.voltage_front, self.voltage_rear = front, rear
 
+    def __str__(self):
+        return 'voltage: front: %f, rear: %f' % (self.voltage_front, self.voltage_rear)
+
 
 class Location(Value):
     def __init__(self, x, y, angle):
         Value.__init__(self)
         self.x, self.y, self.angle = x, y, angle
+
+    def __str__(self):
+        return 'location: x: %f, y: %f, angle: %f' % (self.x, self.y, self.angle)

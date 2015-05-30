@@ -8,7 +8,8 @@ from amberclient.common.listener import Listener
 
 from ambercommon.common import runtime
 
-from amberdriver.drive_support.drive_support_logic import average, Speed
+from amberdriver.drive_support.drive_support_logic import MotionAnalyzer, SpeedsAnalyzer, ScanAnalyzer, \
+    VoltagesAnalyzer
 from amberdriver.tools import config
 
 
@@ -43,6 +44,20 @@ class DriveSupport(object):
     def __init__(self, roboclaw_driver, hokuyo_proxy, ninedof_proxy):
         self.__roboclaw_driver = roboclaw_driver
 
+        self.__scan_analyzer = ScanAnalyzer()
+        self.__motion_analyzer = MotionAnalyzer()
+        self.__measured_speeds_analyzer = SpeedsAnalyzer()
+        self.__voltages_analyzer = VoltagesAnalyzer()
+        self.__user_speeds_analyzer = SpeedsAnalyzer()
+
+        self.__measured_speeds = (0, 0, 0, 0)
+
+        self.__last_motions = []
+        self.__last_scans = []
+        self.__last_voltages = []
+        self.__last_measured_speeds = []
+        self.__last_user_speeds = []
+
         self.__is_active = True
 
         self.__hokuyo_proxy = hokuyo_proxy
@@ -67,20 +82,31 @@ class DriveSupport(object):
         self.__roboclaw_driver.stop()
 
     def set_scan(self, scan):
-        pass
+        scan = self.__scan_analyzer(scan)
+        self.__last_scans.append(scan)
 
     def set_motion(self, motion):
-        pass
+        motion = self.__motion_analyzer(motion)
+        self.__last_motions.append(motion)
 
     def measure_loop(self):
         while self.__is_active:
             speeds = self.__roboclaw_driver.get_speeds()
-            currents = self.__roboclaw_driver.get_currents()
             voltages = self.__roboclaw_driver.get_voltages()
+
+            speeds = self.__measured_speeds_analyzer(speeds)
+            voltages = self.__voltages_analyzer(voltages)
+
+            self.__last_measured_speeds.append(speeds)
+            self.__last_voltages.append(voltages)
+
+            self.__measured_speeds = (speeds.speed_front_left, speeds.speed_front_right,
+                                      speeds.speed_rear_left, speeds.speed_rear_right)
+
             time.sleep(0.1)
 
     def get_speeds(self):
-        return self.__roboclaw_driver.get_speeds()
+        return self.__measured_speeds
 
     def set_speeds(self, front_left, front_right, rear_left, rear_right):
         # detect if oscillation in speeds exists
@@ -88,30 +114,9 @@ class DriveSupport(object):
         # reduce/change speed due to environment
         # filter data
 
-        speeds = Speed(front_left, front_right, rear_left, rear_right)
-        self.__roboclaw_driver.set_speeds(speeds.speed_front_left, speeds.speed_front_right,
-                                          speeds.speed_rear_left, speeds.speed_rear_right)
+        user_speeds = self.__user_speeds_analyzer((front_left, front_right, rear_left, rear_right))
 
+        self.__last_user_speeds.append(user_speeds)
 
-def compute_speed_radius(speeds):
-    speed_left = average(speeds.front_left, speeds.rear_left)
-    speed_right = average(speeds.front_right, speeds.rear_right)
-    speed_front = average(speeds.front_left, speeds.front_right)
-    speed_rear = average(speeds.rear_left, speeds.rear_right)
-
-    speed_left_right = average(speed_left, speed_right)
-    speed_front_rear = average(speed_front, speed_rear)
-
-    speed = average(speed_left_right, speed_front_rear)
-    if abs(speed_left - speed_right) > 0.0:
-        radius = speed_right * ROBO_WIDTH / (speed_left - speed_right) + (ROBO_WIDTH / 2.0)
-    else:
-        radius = 0.0
-
-    return speed, radius
-
-
-def compute_accel_side_speed_rotational(speed, radius):
-    speed_rotational = speed / radius
-    acc_side = speed_rotational * speed
-    return acc_side, speed_rotational
+        self.__roboclaw_driver.set_speeds(user_speeds.speed_front_left, user_speeds.speed_front_right,
+                                          user_speeds.speed_rear_left, user_speeds.speed_rear_right)

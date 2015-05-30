@@ -261,8 +261,8 @@ class SpeedsAnalyzer(object):
     @staticmethod
     def compute_rotational_speed(speeds):
         if abs(speeds.speed_left - speeds.speed_right) > 0.0:
-            speeds.radius = speeds.speed_right * ROBO_WIDTH / (speeds.speed_left - speeds.speed_right) + (
-                ROBO_WIDTH / 2.0)
+            speeds.radius = speeds.speed_right * ROBO_WIDTH / \
+                            (speeds.speed_left - speeds.speed_right) + (ROBO_WIDTH / 2.0)
             speeds.rotational_speed = speeds.linear_speed / speeds.radius
         else:
             speeds.radius = 0.0
@@ -290,10 +290,10 @@ class MotionAnalyzer(object):
         accel = motion.get_accel()
         gyro = motion.get_gyro()
 
-        accel_forward, accel_side, = accel.y_axis / 100.0, accel.x_axis / 100.0
+        acceleration_forward, acceleration_side, = accel.y_axis * 10.0, accel.x_axis * 10.0
         speed_rotational = math.radians(gyro.z_axis)
 
-        return Motion(accel_forward, accel_side, speed_rotational)
+        return Motion(acceleration_forward, acceleration_side, speed_rotational)
 
     def compute_motion(self, motion):
         self.__gravity_forward = self.__gravity_alpha * self.__gravity_forward + \
@@ -312,10 +312,10 @@ class MotionAnalyzer(object):
     @staticmethod
     def compute_speeds(motion):
         if abs(motion.speed_rotational) > 0.0:
-            speed = motion.acceleration_side / motion.speed_rotational
-            radius = speed / motion.speed_rotational
-            motion.speed_linear = speed * 1000.0
-            motion.radius = radius * 1000.0
+            speed_linear = motion.acceleration_side / motion.speed_rotational
+            radius = speed_linear / motion.speed_rotational
+            motion.speed_linear = speed_linear
+            motion.radius = radius
         else:
             motion.speed_linear = 0.0
             motion.radius = 0.0
@@ -339,9 +339,9 @@ class VoltagesAnalyzer(object):
         return Voltage(voltage_front, voltage_rear)
 
     def filter_voltage(self, voltage):
-        if voltage.voltage_front > 0.0:
+        if 12.0 < voltage.voltage_front < 18.0:
             voltage.voltage_front = self.__voltage_front_filter(voltage.voltage_front)
-        if voltage.voltage_rear > 0.0:
+        if 12.0 < voltage.voltage_rear < 18.0:
             voltage.voltage_rear = self.__voltage_rear_filter(voltage.voltage_rear)
 
     def __call__(self, voltage):
@@ -371,7 +371,83 @@ class LocationAnalyzer(object):
 
 
 class Limiter(object):
-    pass
+    def __init__(self):
+        self.__speeds_filter = LowPassFilter(0.4, 0.0, 0.0, 0.0, 0.0)
+
+        self.__scan = None
+        self.__motion = None
+        self.__measured_speeds = None
+        self.__voltages = None
+
+    def limit_speed_due_to_distance(self, speeds):
+        scan = self.__scan
+        if scan is not None:
+            # speeds depends on distance to obstacle in 0 deg angle
+            pass
+
+    def limit_speed_due_to_motion(self, speeds):
+        motion = self.__motion
+        if motion is not None:
+            # value of forward acceleration could not be higher than 2.5 m/s
+            # value of side acceleration could not be higher than 1.5 m/s
+            # value of rotational speed could not be higher than 1.8 rad/s in radius 1 m
+            pass
+
+    def limit_speed_due_to_voltage(self, speeds):
+        voltages = self.__voltages
+        if voltages is not None:
+            # value between 14.0 and 16.0 V, could not be lower than 14.0 V
+            pass
+
+    def __call__(self, speeds):
+        # detect if oscillation in speeds exists
+        # detect if oscillation in measured speed exists
+        self.limit_speed_due_to_distance(speeds)
+        self.limit_speed_due_to_voltage(speeds)
+        self.limit_speed_due_to_motion(speeds)
+        # apply changes to speeds
+
+    def update_scan(self, scan):
+        self.__scan = scan
+
+    def update_motion(self, motion):
+        self.__motion = motion
+
+    def update_measured_speeds(self, measured_speeds):
+        self.__measured_speeds = measured_speeds
+
+    def update_voltage(self, voltages):
+        self.__voltages = voltages
+
+
+class Stabilizer(object):
+    def __init__(self, interval=0.1):
+        self.interval = interval
+        self.user_speeds, self.user_speeds_timestamp = None, 0.0
+        self.last_speeds, self.last_speeds_timestamp = None, None
+
+    def set_speeds(self, speeds):
+        if self.user_speeds is None:
+            self.user_speeds = speeds
+            self.user_speeds_timestamp = time.time()
+
+    def run(self):
+        while True:
+            if self.user_speeds is not None:
+                current_timestamp = time.time()
+                if self.last_speeds is not None:
+                    A = divide(subtract(self.user_speeds, self.last_speeds),
+                               subtract(self.user_speeds_timestamp, self.last_speeds_timestamp))
+                    B = subtract(self.user_speeds,
+                                 multiply(A, self.user_speeds_timestamp))
+                    current_speeds = add(multiply(A, current_timestamp), B)
+                else:
+                    current_speeds = self.user_speeds
+                self.last_speeds = current_speeds
+                self.last_speeds_timestamp = current_timestamp
+                self.user_speeds = None
+                # set current_speeds
+            time.sleep(self.interval)
 
 
 class Mapper(object):
@@ -439,36 +515,6 @@ class Locator(object):
     def get_location(self):
         # correlate data calculated and absolute
         return Location(self.__relative_x, self.__relative_y, self.__relative_angle)
-
-
-class Stabilizer(object):
-    def __init__(self, interval=0.1):
-        self.interval = interval
-        self.user_speeds, self.user_speeds_timestamp = None, 0.0
-        self.last_speeds, self.last_speeds_timestamp = None, None
-
-    def set_speeds(self, speeds):
-        if self.user_speeds is None:
-            self.user_speeds = speeds
-            self.user_speeds_timestamp = time.time()
-
-    def run(self):
-        while True:
-            if self.user_speeds is not None:
-                current_timestamp = time.time()
-                if self.last_speeds is not None:
-                    A = divide(subtract(self.user_speeds, self.last_speeds),
-                               subtract(self.user_speeds_timestamp, self.last_speeds_timestamp))
-                    B = subtract(self.user_speeds,
-                                 multiply(A, self.user_speeds_timestamp))
-                    current_speeds = add(multiply(A, current_timestamp), B)
-                else:
-                    current_speeds = self.user_speeds
-                self.last_speeds = current_speeds
-                self.last_speeds_timestamp = current_timestamp
-                self.user_speeds = None
-                # set current_speeds
-            time.sleep(self.interval)
 
 
 """ Objects class """

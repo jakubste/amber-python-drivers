@@ -6,12 +6,12 @@ import math
 
 import traceback
 import os
-from ambercommon.common import runtime
 
+from ambercommon.common import runtime
 from amberclient.common.listener import Listener
 
-from amberdriver.drive_support import drive_support_logic
-from amberdriver.tools import config, bound_sleep_interval
+from amberdriver.drive_to_point import drive_to_point_logic
+from amberdriver.tools import logic, config, bound_sleep_interval
 
 
 __author__ = 'paoolo'
@@ -66,7 +66,7 @@ class DriveToPoint(object):
         self.__is_active = True
         self.__driving_allowed = False
 
-        self.__speeds_filter = drive_support_logic.LowPassFilter(0.5, 0.0, 0.0)
+        self.__speeds_filter = logic.LowPassFilter(0.5, 0.0, 0.0)
         self.__logger = logging.getLogger(LOGGER_NAME)
 
         runtime.add_shutdown_hook(self.stop)
@@ -246,15 +246,15 @@ class DriveToPoint(object):
             # sth wrong, stop!
             return 0.0, 0.0
 
-        location_trust = drive_support_logic.location_trust(location)
-        location_angle = drive_support_logic.normalize_angle(location_angle)
+        location_trust_level = logic.compute_location_trust(location)
+        location_angle = drive_to_point_logic.normalize_angle(location_angle)
 
         target_angle = math.atan2(target_y - location_y, target_x - location_x)
         drive_angle = target_angle - location_angle
-        drive_angle = drive_support_logic.normalize_angle(drive_angle)
+        drive_angle = drive_to_point_logic.normalize_angle(drive_angle)
         drive_angle = -drive_angle  # mirrored map
 
-        if location_trust < 0.3:
+        if location_trust_level < 0.3:
             # bad, stop it now
             return 0.0, 0.0
 
@@ -272,10 +272,10 @@ class DriveToPoint(object):
             left = MAX_SPEED - DriveToPoint.compute_change(drive_angle)
             right = MAX_SPEED + DriveToPoint.compute_change(drive_angle)
 
-        if location_trust < 0.8:
+        if location_trust_level < 0.8:
             # control situation
-            left *= location_trust
-            right *= location_trust
+            left *= location_trust_level
+            right *= location_trust_level
 
         return left, right
 

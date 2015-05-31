@@ -5,6 +5,7 @@ import sys
 import os
 
 from amberdriver.tools import config
+from amberdriver.tools.logic import Value, get_angle, LowPassFilter
 
 
 __author__ = 'paoolo'
@@ -16,22 +17,16 @@ ROBO_WIDTH = float(config.ROBO_WIDTH)
 ROBO_MASS = float(config.ROBO_MASS)
 
 MAX_SPEED = float(config.MAX_SPEED)
-MAX_ROTATING_SPEED = float(config.MAX_ROTATING_SPEED)
+
 SOFT_LIMIT = float(config.SOFT_LIMIT)
 HARD_LIMIT = float(config.HARD_LIMIT)
 
-SCANNER_DIST_OFFSET = float(config.SCANNER_DIST_OFFSET)
-ANGLE_RANGE = float(config.ANGLE_RANGE)
-
 DISTANCE_ALPHA = float(config.DISTANCE_ALPHA)
-RODEO_SWAP_ALPHA = float(config.RODEO_SWAP_ALPHA)
+
+ANGLE_RANGE = float(config.ANGLE_RANGE)
+SCANNER_DIST_OFFSET = float(config.SCANNER_DIST_OFFSET)
 
 """ Other """
-
-
-class Values(object):
-    def append(self, values):
-        pass
 
 
 def define_operation(operation):
@@ -59,82 +54,6 @@ divide = define_operation(lambda a, b: a / b)
 
 def average(*values):
     return (float(sum(values)) / float(len(values))) if len(values) > 0 else 0.0
-
-
-""" Angles function, conversion, etc.  """
-
-
-def get_angle(left, right, robo_width):
-    return math.atan2(left - right, float(robo_width))
-
-
-def convert_angles_to_radians(points):
-    return map(lambda (angle, distance): (math.radians(angle), distance), points)
-
-
-def convert_angles_to_degrees(points):
-    return map(lambda (angle, distance): (math.degrees(angle), distance), points)
-
-
-def normalize_angle(angle):
-    if angle < -math.pi:
-        angle += 2 * math.pi
-    elif angle > math.pi:
-        angle -= 2 * math.pi
-    return angle
-
-
-""" Trust data function """
-
-
-def data_trust(data_ts, curr_ts, exp_base=4.0 / 3.0):
-    val = data_ts - curr_ts
-    return math.pow(exp_base, val)
-
-
-def location_trust(location, exp_base=4.0 / 3.0):
-    _, _, location_probability, _, location_timestamp = location
-    current_timestamp = time.time()
-    return location_probability * data_trust(location_timestamp / 1000.0, current_timestamp, exp_base)
-
-
-""" Data polar/grid functions, conversion, etc. """
-
-
-def convert_grid_to_polar(x, y):
-    angle = math.atan2(y, x)
-    value = math.sqrt(x ** 2 + y ** 2)
-    return angle, value
-
-
-def convert_polar_to_grid(value, angle):
-    x = value * math.cos(angle)
-    y = value * math.cos(angle)
-    return x, y
-
-
-def convert_speed_grid_to_polar(velocity_x, velocity_y):
-    return convert_grid_to_polar(velocity_x, velocity_y)
-
-
-def convert_speed_polar_to_grid(velocity, angle):
-    return convert_polar_to_grid(velocity, angle)
-
-
-def convert_map_grid_to_polar(map_grid):
-    map_polar = []
-    for x, y in map_grid:
-        angle, distance = convert_grid_to_polar(x, y)
-        map_polar.append((angle, distance))
-    return map_polar
-
-
-def convert_map_polar_to_grid(map_polar):
-    map_grid = []
-    for angle, distance in map_polar:
-        x, y = convert_polar_to_grid(distance, angle)
-        map_grid.append((x, y))
-    return map_grid
 
 
 """ Speed function, limitation, etc. """
@@ -194,16 +113,6 @@ def compute_environmental_forces(map_polar,
 """ Additional filter, etc. """
 
 
-class LowPassFilter(object):
-    def __init__(self, alpha, *args):
-        self.__values = args
-        self.__alpha = alpha
-
-    def __call__(self, *args):
-        self.__values = map(lambda (prev, curr): (prev + self.__alpha * (curr - prev)), zip(self.__values, args))
-        return self.__values[0] if len(self.__values) == 1 else self.__values
-
-
 class DelayFilter(object):
     def __init__(self):
         self.all_values = []
@@ -217,13 +126,6 @@ class DelayFilter(object):
                 self.all_values.remove(filtered_value)
             return filtered_values[0][0]
         return None
-
-
-def round(value, granularity=0.25):
-    new_value = int(value / granularity) * granularity
-    if value - new_value >= granularity / 2.0:
-        new_value += granularity
-    return new_value
 
 
 def accel(A, B):
@@ -244,8 +146,9 @@ class SpeedsAnalyzer(object):
 
     @staticmethod
     def get_speeds_data(speeds):
+        # unit is mm/s
         front_left, front_right, rear_left, rear_right = speeds
-        return Speed(front_left, front_right, rear_left, rear_right)
+        return Speeds(front_left, front_right, rear_left, rear_right)
 
     def filter_speeds(self, speeds):
         if 0 <= speeds.speed_front_left < 5000:
@@ -299,7 +202,9 @@ class MotionAnalyzer(object):
         accel = motion.get_accel()
         gyro = motion.get_gyro()
 
+        # unit is cm/s2
         acceleration_forward, acceleration_side, = accel.y_axis / 10.0, accel.x_axis / 10.0
+        # unit is rad/s
         speed_rotational = math.radians(gyro.z_axis)
 
         return Motion(acceleration_forward, acceleration_side, speed_rotational)
@@ -344,8 +249,9 @@ class VoltagesAnalyzer(object):
 
     @staticmethod
     def get_voltages_data(voltages):
+        # unit is V
         voltage_front, voltage_rear = voltages
-        return Voltage(voltage_front, voltage_rear)
+        return Voltages(voltage_front, voltage_rear)
 
     def filter_voltages(self, voltages):
         if 12.0 < voltages.voltage_front < 18.0:
@@ -362,24 +268,6 @@ class VoltagesAnalyzer(object):
         self.filter_voltages(voltages)
         self.compute_voltages(voltages)
         return voltages
-
-
-class ScanAnalyzer(object):
-    def __init__(self):
-        pass
-
-    def __call__(self, scan):
-        points = scan.get_points()
-        convert_angles_to_radians(points)
-        return Scan(points)
-
-
-class LocationAnalyzer(object):
-    def __init__(self):
-        pass
-
-    def __call__(self, location):
-        pass
 
 
 """ Mechanism """
@@ -408,31 +296,39 @@ class Limiter(object):
         self.__measured_speeds = None
         self.__voltages = None
 
+        self.__distance_factor = 0.0
+        self.__acceleration_factor, self.__rotational_factor = 0.0, 0.0
+        self.__voltage_factor = 0.0
+
+    @staticmethod
+    def compute_factor_due_to_distance(scan):
+        factor_cosines = 0.0
+        factor_gauss = 0.0
+        weights_cosines = 0.0
+        weights_gauss = 0.0
+        for angle, distance in scan.points:
+            w_c = math.cos(3.0 / 4.0 * angle)
+            w_g = math.exp(-math.pow(angle, 2.0))
+            weights_cosines += w_c
+            weights_gauss += w_g
+            if 10.0 < distance < 1200.0:
+                factor_cosines += w_c * (distance / 1200.0)
+                factor_gauss += w_g * (distance / 1200.0)
+            else:
+                factor_cosines += w_c
+                factor_gauss += w_g
+        factor_cosines = factor_cosines / weights_cosines
+        factor_gauss = factor_gauss / weights_gauss
+        return 0.4 * factor_cosines + 0.6 * factor_gauss
+
     def limit_speed_due_to_distance(self, speeds):
+        speeds.distance_factor = self.__distance_factor
+
         scan = self.__scan
         if scan is not None:
-            # speeds depends on distance to obstacle in 0 deg angle
-            factor_cosines = 0.0
-            factor_gauss = 0.0
-            weights_cosines = 0.0
-            weights_gauss = 0.0
-            for angle, distance in scan.points:
-                w_c = math.cos(3.0 / 4.0 * angle)
-                w_g = math.pow(2.0 * math.pi, -0.5) * math.exp(-math.pow(angle, 2.0) / 2.0) / 0.4
-                weights_cosines += w_c
-                weights_gauss += w_g
-                if 10.0 < distance < 1200.0:
-                    factor_cosines += w_c * (distance / 1200.0)
-                    factor_gauss += w_g * (distance / 1200.0)
-                else:
-                    factor_cosines += w_c
-                    factor_gauss += w_g
-            factor_cosines = factor_cosines / weights_cosines
-            factor_gauss = factor_gauss / weights_gauss
-            speeds.distance_factor = 0.4 * factor_cosines + 0.6 * factor_gauss
-
             speeds.speed_left = average(speeds.speed_front_left, speeds.speed_rear_left)
             speeds.speed_right = average(speeds.speed_front_right, speeds.speed_rear_right)
+
             current_angle = get_angle(speeds.speed_left, speeds.speed_right, ROBO_WIDTH)
             min_distance, _ = get_min_distance(scan, current_angle,
                                                SCANNER_DIST_OFFSET, ANGLE_RANGE)
@@ -458,32 +354,41 @@ class Limiter(object):
                     speeds.speed_rear_left = 0
                     speeds.speed_rear_right = 0
 
+    @staticmethod
+    def compute_factor_due_to_motion(motion):
+        # value of forward acceleration could not be higher than 20 dm/s2
+        # value of side acceleration could not be higher than 15 dm/s2
+        acceleration_factor = (1 - abs(motion.acceleration_forward) / 20.0) * \
+                              (1 - abs(motion.acceleration_side) / 15.0)
+        # value of rotational speed could not be higher than 1.8 rad/s
+        rotational_factor = (1 - abs(motion.speed_rotational) / 1.8)
+        return acceleration_factor, rotational_factor
 
     def limit_speed_due_to_motion(self, speeds):
+        speeds.acceleration_factor = self.__acceleration_factor
+        speeds.rotational_factor = self.__rotational_factor
+
         motion = self.__motion
         if motion is not None:
-            # value of forward acceleration could not be higher than 20 dm/s2
-            # value of side acceleration could not be higher than 15 dm/s2
-            speeds.acceleration_factor = (1 - abs(motion.acceleration_forward) / 20.0) * \
-                                         (1 - abs(motion.acceleration_side) / 15.0)
-            # value of rotational speed could not be higher than 1.8 rad/s
-            speeds.rotational_factor = (1 - abs(motion.speed_rotational) / 1.8)
+            pass
+
+    @staticmethod
+    def compute_factor_due_to_voltage(voltages):
+        # value between 14.0 and 16.0 V, could not be lower than 14.0 V
+        if voltages.voltage > 0.0:
+            return ((voltages.voltage - 14.0) / 2.0) if voltages.voltage < 16.0 else 1.0
+        else:
+            return 1.0
 
     def limit_speed_due_to_voltage(self, speeds):
-        voltages = self.__voltages
-        if voltages is not None:
-            # value between 14.0 and 16.0 V, could not be lower than 14.0 V
-            if voltages.voltage > 0.0:
-                speeds.voltage_factor = ((voltages.voltage - 14.0) / 2.0) if voltages.voltage < 16.0 else 1.0
-            else:
-                speeds.voltage_factor = 1.0
+        speeds.voltage_factor = self.__voltage_factor
 
     def __call__(self, speeds):
         # detect if oscillation in speeds exists
         # detect if oscillation in measured speed exists
         self.limit_speed_due_to_distance(speeds)
-        self.limit_speed_due_to_voltage(speeds)
         self.limit_speed_due_to_motion(speeds)
+        self.limit_speed_due_to_voltage(speeds)
         # apply changes to speeds
         factor = 0.0
         weight = 0.0
@@ -515,15 +420,18 @@ class Limiter(object):
 
     def update_scan(self, scan):
         self.__scan = scan
+        self.__distance_factor = self.compute_factor_due_to_distance(scan)
 
     def update_motion(self, motion):
         self.__motion = motion
+        self.__acceleration_factor, self.__rotational_factor = self.compute_factor_due_to_motion(motion)
 
     def update_measured_speeds(self, measured_speeds):
         self.__measured_speeds = measured_speeds
 
     def update_voltage(self, voltages):
         self.__voltages = voltages
+        self.__voltage_factor = self.compute_factor_due_to_voltage(voltages)
 
 
 class Stabilizer(object):
@@ -556,91 +464,10 @@ class Stabilizer(object):
             time.sleep(self.interval)
 
 
-class Mapper(object):
-    def __init__(self):
-        self.data_grid = {}
-
-    def add_polar(self, polar, location):
-        current_timestamp = time.time()
-        for angle, distance in polar:
-            angle = angle + location.angle
-            x, y = convert_polar_to_grid(distance, angle)
-            x, y = x + location.x, y + location.y
-            x, y = round(x), round(y)
-            if x not in self.data_grid:
-                self.data_grid[x] = {}
-            self.data_grid[x][y] = current_timestamp
-
-    def flush(self, offset=0.5):
-        current_timestamp = time.time()
-        to_remove = []
-        for x in self.data_grid:
-            for y in self.data_grid[x]:
-                if self.data_grid[x][y] < current_timestamp - offset:
-                    to_remove.append((x, y))
-        for x, y in to_remove:
-            del self.data_grid[x][y]
-
-
-class Locator(object):
-    def __init__(self):
-        self.__time_stamp = 0.0
-        self.__relative_x, self.__relative_y, self.__relative_angle = 0.0, 0.0, 0.0
-        self.__absolute_x, self.__absolute_y, self.__absolute_angle = 0.0, 0.0, 0.0
-
-    def __get_delta_timestamp(self):
-        current_timestamp = time.time()
-        delta_timestamp = current_timestamp - self.__time_stamp
-        self.__time_stamp = current_timestamp
-        return delta_timestamp
-
-    def update_absolute_location(self, x, y, angle):
-        self.__absolute_x, self.__absolute_y, self.__absolute_angle = x, y, angle
-
-    def calculate_relative_location(self, speed_left, speed_right):
-        delta_timestamp = self.__get_delta_timestamp()
-
-        if speed_right == speed_left:
-            x = self.__relative_x + speed_left * delta_timestamp * math.cos(self.__relative_angle)
-            y = self.__relative_y + speed_right * delta_timestamp * math.sin(self.__relative_angle)
-
-            angle = self.__relative_angle
-
-        else:
-            a = 0.5 * ROBO_WIDTH * (speed_right + speed_left) / (speed_right - speed_left)
-            angle = self.__relative_angle + (speed_right - speed_left) / ROBO_WIDTH * delta_timestamp
-
-            x = self.__relative_x + a * (math.sin(angle) - math.sin(self.__relative_angle))
-            y = self.__relative_y - a * (math.cos(angle) - math.cos(self.__relative_angle))
-
-            angle = normalize_angle(angle)
-
-        self.__relative_x, self.__relative_y, self.__relative_angle = x, y, angle
-        return x, y, angle
-
-    def get_location(self):
-        # correlate data calculated and absolute
-        return Location(self.__relative_x, self.__relative_y, self.__relative_angle)
-
-
 """ Objects class """
 
 
-class Value():
-    def __init__(self):
-        self.timestamp = time.time() * 1000.0
-
-
-class Scan(Value):
-    def __init__(self, points):
-        Value.__init__(self)
-        self.points = points
-
-    def __str__(self):
-        return 'scan: points: %s' % str(self.points)[:100]
-
-
-class Speed(Value):
+class Speeds(Value):
     def __init__(self, front_left, front_right, rear_left, rear_right):
         Value.__init__(self)
         self.speed_front_left, self.speed_front_right = front_left, front_right
@@ -664,19 +491,10 @@ class Motion(Value):
                (self.acceleration_forward, self.acceleration_side, self.speed_rotational)
 
 
-class Voltage(Value):
+class Voltages(Value):
     def __init__(self, front, rear):
         Value.__init__(self)
         self.voltage_front, self.voltage_rear = front, rear
 
     def __str__(self):
         return 'voltage: front: %f, rear: %f' % (self.voltage_front, self.voltage_rear)
-
-
-class Location(Value):
-    def __init__(self, x, y, angle):
-        Value.__init__(self)
-        self.x, self.y, self.angle = x, y, angle
-
-    def __str__(self):
-        return 'location: x: %f, y: %f, angle: %f' % (self.x, self.y, self.angle)

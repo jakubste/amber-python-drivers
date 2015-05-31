@@ -1,1 +1,177 @@
+import math
+import time
+
+import os
+
+from amberdriver.tools import config
+
+from amberdriver.tools.logic import Value
+
+
 __author__ = 'paoolo'
+
+pwd = os.path.dirname(os.path.abspath(__file__))
+config.add_config_ini('%s/drive_to_point.ini' % pwd)
+
+ROBO_WIDTH = float(config.ROBO_WIDTH)
+
+""" Data polar/grid functions, conversion, etc. """
+
+
+def convert_grid_to_polar(x, y):
+    angle = math.atan2(y, x)
+    value = math.sqrt(x ** 2 + y ** 2)
+    return angle, value
+
+
+def convert_polar_to_grid(value, angle):
+    x = value * math.cos(angle)
+    y = value * math.cos(angle)
+    return x, y
+
+
+def convert_speed_grid_to_polar(velocity_x, velocity_y):
+    return convert_grid_to_polar(velocity_x, velocity_y)
+
+
+def convert_speed_polar_to_grid(velocity, angle):
+    return convert_polar_to_grid(velocity, angle)
+
+
+def convert_map_grid_to_polar(map_grid):
+    map_polar = []
+    for x, y in map_grid:
+        angle, distance = convert_grid_to_polar(x, y)
+        map_polar.append((angle, distance))
+    return map_polar
+
+
+def convert_map_polar_to_grid(map_polar):
+    map_grid = []
+    for angle, distance in map_polar:
+        x, y = convert_polar_to_grid(distance, angle)
+        map_grid.append((x, y))
+    return map_grid
+
+
+def normalize_angle(angle):
+    if angle < -math.pi:
+        angle += 2 * math.pi
+    elif angle > math.pi:
+        angle -= 2 * math.pi
+    return angle
+
+
+""" Data analyzer """
+
+
+class LocationAnalyzer(object):
+    def __init__(self):
+        pass
+
+    @staticmethod
+    def get_location_data(location):
+        x, y, probability, angle, _ = location.get_location()
+        return Location(x, y, angle)
+
+    def __call__(self, location):
+        location = self.get_location_data(location)
+
+
+""" Mechanism """
+
+
+class Mapper(object):
+    def __init__(self):
+        self.data_grid = {}
+
+    def add_polar(self, polar, location):
+        current_timestamp = time.time()
+        for angle, distance in polar:
+            angle = angle + location.angle
+            x, y = convert_polar_to_grid(distance, angle)
+            x, y = x + location.x, y + location.y
+            x, y = round(x), round(y)
+            if x not in self.data_grid:
+                self.data_grid[x] = {}
+            self.data_grid[x][y] = current_timestamp
+
+    def flush(self, offset=0.5):
+        current_timestamp = time.time()
+        to_remove = []
+        for x in self.data_grid:
+            for y in self.data_grid[x]:
+                if self.data_grid[x][y] < current_timestamp - offset:
+                    to_remove.append((x, y))
+        for x, y in to_remove:
+            del self.data_grid[x][y]
+
+
+class Locator(object):
+    def __init__(self):
+        self.__time_stamp = 0.0
+        self.__relative_x, self.__relative_y, self.__relative_angle = 0.0, 0.0, 0.0
+        self.__absolute_x, self.__absolute_y, self.__absolute_angle = 0.0, 0.0, 0.0
+        self.__absolute_probability = 0.0
+
+    def __get_delta_timestamp(self):
+        current_timestamp = time.time()
+        delta_timestamp = current_timestamp - self.__time_stamp
+        self.__time_stamp = current_timestamp
+        return delta_timestamp
+
+    def update_absolute_location(self, location):
+        x, y, probability, angle, _ = location.get_location()
+        self.__absolute_x, self.__absolute_y, self.__absolute_angle = x, y, angle
+        self.__absolute_probability = probability
+        if self.__absolute_probability > 0.9:
+            self.__relative_x, self.__relative_y, self.__relative_angle = x, y, angle
+
+    def calculate_relative_location(self, speed_left, speed_right):
+        delta_timestamp = self.__get_delta_timestamp()
+
+        if speed_right == speed_left:
+            x = self.__relative_x + speed_left * delta_timestamp * math.cos(self.__relative_angle)
+            y = self.__relative_y + speed_right * delta_timestamp * math.sin(self.__relative_angle)
+
+            angle = self.__relative_angle
+
+        else:
+            a = 0.5 * ROBO_WIDTH * (speed_right + speed_left) / (speed_right - speed_left)
+            angle = self.__relative_angle + (speed_right - speed_left) / ROBO_WIDTH * delta_timestamp
+
+            x = self.__relative_x + a * (math.sin(angle) - math.sin(self.__relative_angle))
+            y = self.__relative_y - a * (math.cos(angle) - math.cos(self.__relative_angle))
+
+            angle = normalize_angle(angle)
+
+        self.__relative_x, self.__relative_y, self.__relative_angle = x, y, angle
+
+    def get_location(self):
+        # correlate data calculated and absolute
+        if self.__absolute_probability > 0.8:
+            return Location(self.__absolute_x, self.__absolute_y, self.__absolute_angle)
+        elif self.__absolute_probability < 0.3:
+            return Location(self.__relative_x, self.__relative_y, self.__relative_angle)
+        else:
+            probability = self.__absolute_probability
+            x = (1.0 - probability) * self.__relative_x + probability * self.__absolute_x
+            y = (1.0 - probability) * self.__relative_y + probability * self.__absolute_y
+            angle = (1.0 - probability) * self.__relative_angle + probability * self.__absolute_angle
+            return Location(x, y, angle)
+
+    def __call__(self, speeds):
+        self.calculate_relative_location(speeds.speed_left, speeds.speed_right)
+        return self.get_location()
+
+
+""" Objects class """
+
+
+class Location(Value):
+    def __init__(self, x, y, angle):
+        Value.__init__(self)
+        self.x, self.y, self.angle = x, y, angle
+
+    def __str__(self):
+        return 'location: x: %f, y: %f, angle: %f' % (self.x, self.y, self.angle)

@@ -5,12 +5,10 @@ import time
 import os
 
 from amberclient.common.listener import Listener
-
 from ambercommon.common import runtime
 
-from amberdriver.drive_support.drive_support_logic import MotionAnalyzer, SpeedsAnalyzer, ScanAnalyzer, \
-    VoltagesAnalyzer, Limiter, Speed
-from amberdriver.tools import config
+from amberdriver.drive_support import drive_support_logic
+from amberdriver.tools import logic, config
 
 
 __author__ = 'paoolo'
@@ -44,12 +42,12 @@ class DriveSupport(object):
     def __init__(self, roboclaw_driver, hokuyo_proxy, ninedof_proxy):
         self.__roboclaw_driver = roboclaw_driver
 
-        self.__scan_analyzer = ScanAnalyzer()
-        self.__motion_analyzer = MotionAnalyzer()
-        self.__speeds_analyzer = SpeedsAnalyzer()
-        self.__voltages_analyzer = VoltagesAnalyzer()
+        self.__scan_analyzer = logic.ScanAnalyzer()
+        self.__motion_analyzer = drive_support_logic.MotionAnalyzer()
+        self.__speeds_analyzer = drive_support_logic.SpeedsAnalyzer()
+        self.__voltages_analyzer = drive_support_logic.VoltagesAnalyzer()
 
-        self.__speeds_limiter = Limiter()
+        self.__speeds_limiter = drive_support_logic.Limiter()
         self.__measured_speeds = (0, 0, 0, 0)
 
         self.__is_active = True
@@ -103,7 +101,7 @@ class DriveSupport(object):
         return self.__measured_speeds
 
     def set_speeds(self, front_left, front_right, rear_left, rear_right):
-        user_speeds = Speed(front_left, front_right, rear_left, rear_right)
+        user_speeds = drive_support_logic.Speeds(front_left, front_right, rear_left, rear_right)
         self.__speeds_limiter(user_speeds)
         self.__roboclaw_driver.set_speeds(user_speeds.speed_front_left, user_speeds.speed_front_right,
                                           user_speeds.speed_rear_left, user_speeds.speed_rear_right)

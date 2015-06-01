@@ -3,7 +3,6 @@ import logging.config
 import time
 
 import os
-
 from amberclient.common.listener import Listener
 from ambercommon.common import runtime
 
@@ -45,7 +44,6 @@ class DriveSupport(object):
         self.__scan_analyzer = logic.ScanAnalyzer()
         self.__motion_analyzer = drive_support_logic.MotionAnalyzer()
         self.__speeds_analyzer = drive_support_logic.SpeedsAnalyzer()
-        self.__voltages_analyzer = drive_support_logic.VoltagesAnalyzer()
 
         self.__speeds_limiter = drive_support_logic.Limiter()
         self.__measured_speeds = (0, 0, 0, 0)
@@ -81,20 +79,13 @@ class DriveSupport(object):
         motion = self.__motion_analyzer(motion)
         self.__speeds_limiter.update_motion(motion)
 
-    def measure_loop(self):
+    def measure_speeds_loop(self):
         while self.__is_active:
             measured_speeds = self.__roboclaw_driver.get_speeds()
-            voltages = self.__roboclaw_driver.get_voltages()
-
             measured_speeds = self.__speeds_analyzer(measured_speeds)
-            voltages = self.__voltages_analyzer(voltages)
-
             self.__speeds_limiter.update_measured_speeds(measured_speeds)
-            self.__speeds_limiter.update_voltage(voltages)
-
             self.__measured_speeds = (measured_speeds.speed_front_left, measured_speeds.speed_front_right,
                                       measured_speeds.speed_rear_left, measured_speeds.speed_rear_right)
-
             time.sleep(0.2)
 
     def get_speeds(self):

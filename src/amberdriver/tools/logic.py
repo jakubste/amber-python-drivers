@@ -14,6 +14,13 @@ def round(value, granularity=0.25):
     return new_value
 
 
+def drange(start, stop, step):
+    r = start
+    while (r < stop and step > 0.0) or (r > stop and step < 0.0):
+        yield r
+        r += step
+
+
 """ Trust data function """
 
 
@@ -84,3 +91,15 @@ class LowPassFilter(object):
         self.__values = map(lambda val: round(val, 0.01), self.__values)
         self.__values = map(lambda (new, curr): curr if abs(new - curr) <= 0.01 else new, zip(self.__values, args))
         return self.__values[0] if len(self.__values) == 1 else self.__values
+
+
+def convert_grid_to_polar(x, y):
+    angle = math.atan2(y, x)
+    value = math.sqrt(x ** 2 + y ** 2)
+    return angle, value
+
+
+def convert_polar_to_grid(value, angle):
+    x = value * math.cos(angle)
+    y = value * math.sin(angle)
+    return x, y

@@ -4,8 +4,7 @@ import time
 import os
 
 from amberdriver.tools import config
-
-from amberdriver.tools.logic import Value
+from amberdriver.tools.logic import Value, convert_grid_to_polar, convert_polar_to_grid
 
 
 __author__ = 'paoolo'
@@ -16,18 +15,6 @@ config.add_config_ini('%s/drive_to_point.ini' % pwd)
 ROBO_WIDTH = float(config.ROBO_WIDTH)
 
 """ Data polar/grid functions, conversion, etc. """
-
-
-def convert_grid_to_polar(x, y):
-    angle = math.atan2(y, x)
-    value = math.sqrt(x ** 2 + y ** 2)
-    return angle, value
-
-
-def convert_polar_to_grid(value, angle):
-    x = value * math.cos(angle)
-    y = value * math.cos(angle)
-    return x, y
 
 
 def convert_speed_grid_to_polar(velocity_x, velocity_y):

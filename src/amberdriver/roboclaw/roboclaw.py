@@ -1123,6 +1123,7 @@ class RoboclawDriver(object):
             if front_error_codes != front_error_codes_tmp or rear_error_codes != rear_error_codes_tmp:
                 same_errors = False
                 break
+            time.sleep(0.2)
 
         return (front_error_codes, rear_error_codes) if same_errors else (0x0, 0x0)
 

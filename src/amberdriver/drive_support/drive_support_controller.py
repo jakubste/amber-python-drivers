@@ -75,7 +75,7 @@ if __name__ == '__main__':
                                                   name='timeout-monitor-thread')
         error_monitor_thread = threading.Thread(target=roboclaw_driver.error_monitor_loop,
                                                 name='error-monitor-thread')
-        measuring_thread = threading.Thread(target=drive_support.measure_loop,
+        measuring_thread = threading.Thread(target=drive_support.measure_speeds_loop,
                                             name='measuring-thread')
 
         timeout_monitor_thread.start()

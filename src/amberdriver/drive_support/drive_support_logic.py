@@ -499,10 +499,11 @@ class Limiter(object):
             factor /= weight
         else:
             factor = 1.0
+        if hasattr(speeds, 'speed_limited_by_motion'):
+            factor *= (speeds.speed_limited_by_motion / speeds.speed_linear)
+        if hasattr(speeds, 'speed_limited_by_distance'):
+            factor *= (speeds.speed_limited_by_distance / speeds.speed_linear)
         # sys.stderr.write('factor: %f\n' % factor)
-        motion_factor = speeds.speed_limited_by_motion / speeds.speed_linear
-        distance_factor = speeds.speed_limited_by_distance / speeds.speed_linear
-        factor = factor * motion_factor * distance_factor
         speeds.speed_front_left *= factor
         speeds.speed_front_right *= factor
         speeds.speed_rear_left *= factor

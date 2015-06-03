@@ -308,10 +308,10 @@ def compute_acceleration(last_speeds):
             while True:
                 speeds = all_speeds_iter.next()
                 acceleration += (
-                    (speeds.speed_linear - prev_speeds.speed_linear) / (speeds.timestamp - speeds.timestamp))
+                    (speeds.speed_linear - prev_speeds.speed_linear) / (speeds.timestamp - prev_speeds.timestamp))
         except StopIteration:
             pass
-        return acceleration / (len(acceleration) - 1.0)
+        return acceleration / (len(last_speeds) - 1.0)
     return 0.0
 
 

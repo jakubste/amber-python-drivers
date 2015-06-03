@@ -286,12 +286,14 @@ def sign(value):
 def compute_circle(radius, stop_angle):
     if radius <= 0.0:
         start_angle = 0.0
+        stop_angle = -stop_angle
+        step = 0.017453292519943295
     else:
         start_angle = math.pi
-        stop_angle = math.pi - stop_angle
-    sign_radius = sign(radius)
+        stop_angle = math.pi + stop_angle
+        step = -0.017453292519943295
     circle = []
-    for angle in logic.drange(start_angle, stop_angle, -sign_radius * 0.017453292519943295):
+    for angle in logic.drange(start_angle, stop_angle, step):
         point = logic.convert_polar_to_grid(radius, angle)
         circle.append(point)
     circle = map(lambda (x, y): (x + radius, y), circle)

@@ -464,11 +464,11 @@ class Limiter(object):
         speeds.speed_linear = average(speeds.speed_left, speeds.speed_right)
         speeds.radius = get_radius(speeds.speed_left, speeds.speed_right)
         speeds.acceleration_forward = compute_acceleration(self.last_speeds)
-        if speeds.radius is not None:
+        if speeds.radius is not None and speeds.radius != 0.0:
             speeds.acceleration_side = math.pow(speeds.speed_linear, 2.0) / speeds.radius
         else:
             speeds.acceleration_side = None
-        if speeds.radius is not None:
+        if speeds.radius is not None and speeds.radius != 0.0:
             speeds.speed_rotational = speeds.speed_linear / speeds.radius
         else:
             speeds.speed_rotational = None

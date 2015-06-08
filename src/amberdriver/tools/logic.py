@@ -7,7 +7,7 @@ __author__ = 'paoolo'
 """ Other """
 
 
-def round(value, granularity=0.25):
+def dround(value, granularity=0.25):
     new_value = int(value / granularity) * granularity
     if value - new_value >= granularity / 2.0:
         new_value += granularity
@@ -19,6 +19,36 @@ def drange(start, stop, step):
     while (r < stop and step > 0.0) or (r > stop and step < 0.0):
         yield r
         r += step
+
+
+def sign(value):
+    return -1 if value < 0.0 else 1
+
+
+def vector_operation(operation):
+    def operation_func(A, B):
+        if type(A) == type(B) == tuple:
+            return tuple(map(lambda (a, b): operation(a, b), zip(A, B)))
+        elif type(A) == type(B) != tuple:
+            return operation(A, B)
+        elif type(A) != type(B) and type(A) == tuple:
+            return tuple(map(lambda a: operation(a, B), A))
+        elif type(A) != type(B) and type(B) == tuple:
+            return tuple(map(lambda b: operation(A, b), B))
+        else:
+            raise TypeError()
+
+    return operation_func
+
+
+add = vector_operation(lambda a, b: a + b)
+subtract = vector_operation(lambda a, b: a - b)
+multiply = vector_operation(lambda a, b: a * b)
+divide = vector_operation(lambda a, b: a / b)
+
+
+def average(*values):
+    return (float(sum(values)) / float(len(values))) if len(values) > 0 else 0.0
 
 
 """ Trust data function """
@@ -38,16 +68,24 @@ def compute_location_trust(location, exp_base=4.0 / 3.0):
 """ Angles function, conversion, etc.  """
 
 
-def get_angle(left, right, robo_width):
-    return math.atan2(left - right, float(robo_width))
-
-
 def convert_angles_to_radians(points):
     return map(lambda (angle, distance): (math.radians(angle), distance), points)
 
 
 def convert_angles_to_degrees(points):
     return map(lambda (angle, distance): (math.degrees(angle), distance), points)
+
+
+def convert_polar_to_grid(value, angle):
+    x = value * math.cos(angle)
+    y = value * math.sin(angle)
+    return x, y
+
+
+def convert_grid_to_polar(x, y):
+    angle = math.atan2(y, x)
+    value = math.sqrt(x ** 2 + y ** 2)
+    return angle, value
 
 
 """ Data analyzer """
@@ -81,6 +119,9 @@ class Scan(Value):
         return 'scan: points: counts: %d' % len(self.points)
 
 
+""" Filter """
+
+
 class LowPassFilter(object):
     def __init__(self, alpha, *args):
         self.__values = args
@@ -88,18 +129,6 @@ class LowPassFilter(object):
 
     def __call__(self, *args):
         self.__values = map(lambda (prev, curr): (prev + self.__alpha * (curr - prev)), zip(self.__values, args))
-        self.__values = map(lambda val: round(val, 0.01), self.__values)
+        self.__values = map(lambda val: dround(val, 0.01), self.__values)
         self.__values = map(lambda (new, curr): curr if abs(new - curr) <= 0.01 else new, zip(self.__values, args))
         return self.__values[0] if len(self.__values) == 1 else self.__values
-
-
-def convert_grid_to_polar(x, y):
-    angle = math.atan2(y, x)
-    value = math.sqrt(x ** 2 + y ** 2)
-    return angle, value
-
-
-def convert_polar_to_grid(value, angle):
-    x = value * math.cos(angle)
-    y = value * math.sin(angle)
-    return x, y

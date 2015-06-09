@@ -206,7 +206,7 @@ def compute_circle(radius, stop_angle):
         step = 0.017453292519943295
     else:
         start_angle = math.pi
-        stop_angle = math.pi + stop_angle
+        stop_angle = math.pi - stop_angle
         step = -0.017453292519943295
 
     circle = []

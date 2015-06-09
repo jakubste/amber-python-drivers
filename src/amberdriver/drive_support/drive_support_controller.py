@@ -8,6 +8,7 @@ from amberclient.ninedof.ninedof import NinedofProxy
 import os
 import serial
 from amberclient.common.amber_client import AmberClient
+
 from amberclient.hokuyo.hokuyo import HokuyoProxy
 
 from amberdriver.drive_support.drive_support import DriveSupport
@@ -45,7 +46,7 @@ if __name__ == '__main__':
 
         roboclaw_front = Roboclaw(_serial_port, FRONT_RC_ADDRESS)
         roboclaw_rear = Roboclaw(_serial_port, REAR_RC_ADDRESS)
-        roboclaw_driver = RoboclawDriver(roboclaw_front, roboclaw_rear,
+        roboclaw_driver = RoboclawDriver(_serial_port, roboclaw_front, roboclaw_rear,
                                          MOTORS_P_CONST, MOTORS_I_CONST, MOTORS_D_CONST, MOTORS_MAX_QPPS)
 
         sys.stderr.write('FIRMWARE VERSION, FRONT:\n%s\n' % str(roboclaw_front.read_firmware_version()))

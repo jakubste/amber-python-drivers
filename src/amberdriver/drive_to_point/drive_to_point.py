@@ -6,12 +6,14 @@ import math
 
 import traceback
 import os
+
 from ambercommon.common import runtime
 
 from amberclient.common.listener import Listener
 
 from amberdriver.drive_to_point import drive_to_point_logic
 from amberdriver.tools import logic, config, bound_sleep_interval
+from amberdriver.tools.logic import sign
 
 
 __author__ = 'paoolo'
@@ -22,8 +24,7 @@ config.add_config_ini('%s/drive_to_point.ini' % pwd)
 
 LOGGER_NAME = 'DriveToPoint'
 
-MAX_SPEED = int(config.DRIVE_TO_POINT_MAX_SPEED)
-DRIVING_ALPHA = float(config.DRIVE_TO_POINT_DRIVING_ALPHA)
+MAX_SPEED = float(config.DRIVE_TO_POINT_MAX_SPEED)
 
 
 def compute_sleep_interval(current_timestamp, last_timestamp, sleep_interval,
@@ -179,7 +180,7 @@ class DriveToPoint(object):
 
         while not DriveToPoint.target_reached(location, target) and self.__driving_allowed and self.__is_active \
                 and not self.__next_targets_timestamp > next_targets_timestamp:
-            left, right = DriveToPoint.compute_speed(location, target)
+            left, right = self.compute_speed(location, target)
 
             """
             TODO(paoolo): do nice stuff with avoiding obstacles
@@ -194,7 +195,6 @@ class DriveToPoint(object):
             * drive to (temporary) destination
             """
 
-            left, right = self.__speeds_filter(left, right)
             left, right = int(left), int(right)
             self.__driver_proxy.send_motors_command(left, right, left, right)
 
@@ -236,8 +236,7 @@ class DriveToPoint(object):
             traceback.print_exc()
             return False
 
-    @staticmethod
-    def compute_speed(location, target):
+    def compute_speed(self, location, target):
         target_x, target_y, _ = target
 
         location_x, location_y, _, location_angle, _ = location
@@ -255,14 +254,14 @@ class DriveToPoint(object):
         drive_angle = target_angle - location_angle
         drive_angle = drive_to_point_logic.normalize_angle(drive_angle)
         drive_angle = -drive_angle  # mirrored map
-        drive_distance = math.sqrt(diff_y * diff_y + diff_x * diff_x)
+        drive_distance = math.sqrt(diff_y * diff_y + diff_x * diff_x) * 1000.0
 
         if location_trust_level < 0.3:
             # bad, stop it now
             return 0.0, 0.0
 
-        alpha = math.pow(0.999, drive_distance) * 2.792526803190927 + 0.5235987755982988
-        beta = math.pow(0.999, drive_distance) * 1.3962634015954636 + 0.2617993877991494
+        beta = math.pow(0.999, drive_distance) * 2.792526803190927 + 0.5235987755982988
+        alpha = math.pow(0.999, drive_distance) * 1.3962634015954636 + 0.2617993877991494
 
         if abs(drive_angle) < alpha:  # 10st
             # drive normal
@@ -275,17 +274,24 @@ class DriveToPoint(object):
                 left, right = right, left
         else:
             # drive on turn
-            left = MAX_SPEED - DriveToPoint.compute_change(drive_angle)
-            right = MAX_SPEED + DriveToPoint.compute_change(drive_angle)
+            left = MAX_SPEED - DriveToPoint.compute_change(drive_angle, math.pi / beta)
+            right = MAX_SPEED + DriveToPoint.compute_change(drive_angle, math.pi / beta)
 
         if location_trust_level < 0.8:
             # control situation
             left *= location_trust_level
             right *= location_trust_level
 
+        if drive_distance < 400.0:
+            left *= ((drive_distance + 100.0) / 500.0)
+            right *= ((drive_distance + 100.0) / 500.0)
+
+        _left, _right = self.__speeds_filter(abs(left), abs(right))
+        left, right = sign(left) * _left, sign(right) * _right
+
         return left, right
 
 
     @staticmethod
-    def compute_change(drive_angle):
-        return DRIVING_ALPHA * drive_angle / math.pi * MAX_SPEED
+    def compute_change(drive_angle, driving_alpha):
+        return driving_alpha * drive_angle / math.pi * MAX_SPEED

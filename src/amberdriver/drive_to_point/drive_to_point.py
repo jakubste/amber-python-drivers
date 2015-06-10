@@ -6,8 +6,8 @@ import math
 
 import traceback
 import os
-
 from ambercommon.common import runtime
+
 from amberclient.common.listener import Listener
 
 from amberdriver.drive_to_point import drive_to_point_logic
@@ -249,19 +249,25 @@ class DriveToPoint(object):
         location_trust_level = logic.compute_location_trust(location)
         location_angle = drive_to_point_logic.normalize_angle(location_angle)
 
+        diff_y = target_y - location_y
+        diff_x = target_x - location_x
         target_angle = math.atan2(target_y - location_y, target_x - location_x)
         drive_angle = target_angle - location_angle
         drive_angle = drive_to_point_logic.normalize_angle(drive_angle)
         drive_angle = -drive_angle  # mirrored map
+        drive_distance = math.sqrt(diff_y * diff_y + diff_x * diff_x)
 
         if location_trust_level < 0.3:
             # bad, stop it now
             return 0.0, 0.0
 
-        if abs(drive_angle) < math.pi / 18:  # 10st
+        alpha = math.pow(0.999, drive_distance) * 2.792526803190927 + 0.5235987755982988
+        beta = math.pow(0.999, drive_distance) * 1.3962634015954636 + 0.2617993877991494
+
+        if abs(drive_angle) < alpha:  # 10st
             # drive normal
             left, right = MAX_SPEED, MAX_SPEED
-        elif abs(drive_angle) > math.pi / DRIVING_ALPHA:
+        elif abs(drive_angle) > beta:
             # rotate in place
             left = -MAX_SPEED
             right = MAX_SPEED

@@ -6,9 +6,7 @@ import math
 
 import traceback
 import os
-
 from ambercommon.common import runtime
-
 from amberclient.common.listener import Listener
 
 from amberdriver.drive_to_point import drive_to_point_logic
@@ -281,10 +279,6 @@ class DriveToPoint(object):
             # control situation
             left *= location_trust_level
             right *= location_trust_level
-
-        if drive_distance < 400.0:
-            left *= ((drive_distance + 100.0) / 500.0)
-            right *= ((drive_distance + 100.0) / 500.0)
 
         _left, _right = self.__speeds_filter(abs(left), abs(right))
         left, right = sign(left) * _left, sign(right) * _right

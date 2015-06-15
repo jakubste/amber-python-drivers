@@ -48,10 +48,10 @@ class DriveSupport(object):
         self.__speeds_analyzer = drive_support_logic.SpeedsAnalyzer()
 
         self.__speeds_limiter = drive_support_logic.Limiter()
-        self.__speeds_stabilizer = drive_support_logic.Stabilizer(roboclaw_driver)
         self.__measured_speeds = (0, 0, 0, 0)
 
         self.__is_active = True
+        self.__last_timestamp = 0.0
 
         self.__hokuyo_proxy = hokuyo_proxy
         self.__ninedof_proxy = ninedof_proxy
@@ -95,9 +95,10 @@ class DriveSupport(object):
         return self.__measured_speeds
 
     def set_speeds(self, front_left, front_right, rear_left, rear_right):
-        user_speeds = drive_support_logic.Speeds(front_left, front_right, rear_left, rear_right)
-        self.__speeds_limiter(user_speeds)
-        self.__speeds_stabilizer.set_speeds(user_speeds)
-
-    def stabilizer_loop(self):
-        self.__speeds_stabilizer.run()
+        current_timestamp = time.time()
+        if current_timestamp - self.__last_timestamp > 0.07:
+            self.__last_timestamp = current_timestamp
+            user_speeds = drive_support_logic.Speeds(front_left, front_right, rear_left, rear_right)
+            self.__speeds_limiter(user_speeds)
+            self.__roboclaw_driver.set_speeds(user_speeds.speed_front_left, user_speeds.speed_front_right,
+                                              user_speeds.speed_rear_left, user_speeds.speed_rear_right)

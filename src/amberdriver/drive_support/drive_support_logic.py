@@ -2,7 +2,6 @@ import math
 import time
 import collections
 
-from ambercommon.common import runtime
 import os
 
 from amberdriver.tools import config
@@ -443,52 +442,6 @@ class Limiter(object):
     def update_measured_speeds(self, measured_speeds):
         self.__measured_speeds = measured_speeds
         self.__speed_factor = self.compute_factor_due_to_speed(measured_speeds)
-
-
-class Stabilizer(object):
-    def __init__(self, roboclaw_driver, interval=0.1):
-        self.__roboclaw_driver = roboclaw_driver
-        self.interval = interval
-
-        self.user_speeds, self.user_speeds_timestamp = None, 0.0
-        self.last_speeds, self.last_speeds_timestamp = None, None
-
-        self.__alive = True
-        runtime.add_shutdown_hook(self.terminate)
-
-    def terminate(self):
-        self.__alive = False
-
-    def set_speeds(self, speeds):
-        if self.user_speeds is None:
-            self.user_speeds = speeds
-            self.user_speeds_timestamp = time.time()
-
-    def run(self):
-        while self.__alive:
-            if self.user_speeds is not None:
-                current_timestamp = time.time()
-                if self.last_speeds is not None:
-                    front_left_diff = self.user_speeds.speed_front_left - self.last_speeds.speed_front_left
-                    front_right_diff = self.user_speeds.speed_front_right - self.last_speeds.speed_front_right
-                    rear_left_diff = self.user_speeds.speed_rear_left - self.last_speeds.speed_rear_left
-                    rear_right_diff = self.user_speeds.speed_rear_right - self.last_speeds.speed_rear_right
-                    timestamp_diff = (self.user_speeds_timestamp - self.last_speeds_timestamp)
-                    timestamp_diff /= self.user_speeds_timestamp
-                    A = (front_left_diff / timestamp_diff, front_right_diff / timestamp_diff,
-                         rear_left_diff / timestamp_diff, rear_right_diff / timestamp_diff)
-                    B = (self.user_speeds.speed_front_left - A[0], self.user_speeds.speed_front_right - A[1],
-                         self.user_speeds.speed_rear_left - A[2], self.user_speeds.speed_rear_right - A[3])
-                    current_speeds = Speeds(A[0] * current_timestamp + B[0], A[1] * current_timestamp + B[1],
-                                            A[2] * current_timestamp + B[2], A[3] * current_timestamp + B[3])
-                else:
-                    current_speeds = self.user_speeds
-                self.last_speeds = current_speeds
-                self.last_speeds_timestamp = current_timestamp
-                self.user_speeds = None
-                self.__roboclaw_driver.set_speeds(current_speeds.speed_front_left, current_speeds.speed_front_right,
-                                                  current_speeds.speed_rear_left, current_speeds.speed_rear_right)
-            time.sleep(self.interval)
 
 
 """ Objects class """

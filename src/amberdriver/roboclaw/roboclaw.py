@@ -841,6 +841,8 @@ class RoboclawDriver(object):
         return (front_error_codes, rear_error_codes) if same_errors else (0x0, 0x0)
 
     def error_monitor_loop(self):
+        no_error = True
+
         while self.__is_active:
             time.sleep(ERROR_MONITOR_INTERVAL / 1000.0)
 
@@ -849,6 +851,7 @@ class RoboclawDriver(object):
             if front_error_status > 0 or rear_error_status > 0:
                 self.__logger.warn('Error: front: %f, rear: %f, reset!', front_error_status, rear_error_status)
                 self.__red_led(True)
+                no_error = False
                 self.__reset()
 
                 if front_error_status == 0x20 or rear_error_status == 0x20:
@@ -859,6 +862,12 @@ class RoboclawDriver(object):
                 self.__logger.warn('Bad feelings: error status(es) less than zero. '
                                    'It looks that CRC is wrong or nothing is returned '
                                    'from Roboclaw.')
+
+            else:
+                if not no_error:
+                    self.__logger.info('No error...')
+                    self.__red_led(False)
+                    no_error = True
 
     def __reset_timeouts(self):
         act_time = time.time()

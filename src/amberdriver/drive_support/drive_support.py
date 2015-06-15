@@ -4,6 +4,7 @@ import time
 
 import os
 from amberclient.common.listener import Listener
+
 from ambercommon.common import runtime
 
 from amberdriver.drive_support import drive_support_logic
@@ -46,6 +47,7 @@ class DriveSupport(object):
         self.__speeds_analyzer = drive_support_logic.SpeedsAnalyzer()
 
         self.__speeds_limiter = drive_support_logic.Limiter()
+        self.__speeds_stabilizer = drive_support_logic.Stabilizer()
         self.__measured_speeds = (0, 0, 0, 0)
 
         self.__is_active = True
@@ -94,5 +96,7 @@ class DriveSupport(object):
     def set_speeds(self, front_left, front_right, rear_left, rear_right):
         user_speeds = drive_support_logic.Speeds(front_left, front_right, rear_left, rear_right)
         self.__speeds_limiter(user_speeds)
-        self.__roboclaw_driver.set_speeds(user_speeds.speed_front_left, user_speeds.speed_front_right,
-                                          user_speeds.speed_rear_left, user_speeds.speed_rear_right)
+        self.__speeds_stabilizer.set_speeds(user_speeds)
+
+    def stabilizer_loop(self):
+        self.__speeds_stabilizer.run()

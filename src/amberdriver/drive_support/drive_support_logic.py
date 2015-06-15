@@ -2,6 +2,7 @@ import math
 import time
 import collections
 
+from ambercommon.common import runtime
 import os
 
 from amberdriver.tools import config
@@ -33,20 +34,11 @@ MAX_ACCELERATION_SIDE = float(config.MAX_ACCELERATION_SIDE)
 """ Speed function, limitation, etc. """
 
 
-def get_speed(left, right):
-    return (left + right) / 2.0
-
-
 def get_radius(left, right):
     if abs(left - right) > 0.0:
         return (right * ROBO_WIDTH) / (left - right) + ROBO_WIDTH / 2.0
     else:
         return None
-
-
-def get_centripetal_force(velocity, radius):
-    if abs(radius) > 0.0:
-        return (ROBO_MASS * math.pow(velocity, 2.0)) / radius
 
 
 def get_hard_limit(distance, soft_limit, hard_limit, max_speed):
@@ -194,11 +186,6 @@ class MotionAnalyzer(object):
 """ Mechanism """
 
 
-def get_max_speed(distance, soft_limit, hard_limit, max_speed):
-    return max_speed / (soft_limit - hard_limit) * float(distance) - \
-           (max_speed * hard_limit) / (soft_limit - hard_limit)
-
-
 def compute_circle(radius, stop_angle):
     if radius < 0.0:
         start_angle = 0.0
@@ -329,11 +316,11 @@ class Limiter(object):
 
         soft_limit = get_soft_limit(speeds.linear_speed,
                                     MAX_SPEED, SOFT_LIMIT * 1.3, HARD_LIMIT * 1.3, DISTANCE_ALPHA)
-        limited_speed = get_max_speed(min_distance, soft_limit,
-                                      HARD_LIMIT * 1.3, MAX_SPEED)
+        hard_limit = get_hard_limit(min_distance, soft_limit,
+                                    HARD_LIMIT * 1.3, MAX_SPEED)
 
         speeds.radius_limited_by_scan = None
-        speeds.speed_limited_by_scan = limited_speed
+        speeds.speed_limited_by_scan = hard_limit
 
     def limit_speed_due_to_distance(self, speeds):
         speeds.distance_factor = self.__distance_factor
@@ -459,10 +446,18 @@ class Limiter(object):
 
 
 class Stabilizer(object):
-    def __init__(self, interval=0.1):
+    def __init__(self, roboclaw_driver, interval=0.1):
+        self.__roboclaw_driver = roboclaw_driver
         self.interval = interval
+
         self.user_speeds, self.user_speeds_timestamp = None, 0.0
         self.last_speeds, self.last_speeds_timestamp = None, None
+
+        self.__alive = True
+        runtime.add_shutdown_hook(self.terminate)
+
+    def terminate(self):
+        self.__alive = False
 
     def set_speeds(self, speeds):
         if self.user_speeds is None:
@@ -470,7 +465,7 @@ class Stabilizer(object):
             self.user_speeds_timestamp = time.time()
 
     def run(self):
-        while True:
+        while self.__alive:
             if self.user_speeds is not None:
                 current_timestamp = time.time()
                 if self.last_speeds is not None:
@@ -484,7 +479,8 @@ class Stabilizer(object):
                 self.last_speeds = current_speeds
                 self.last_speeds_timestamp = current_timestamp
                 self.user_speeds = None
-                # set current_speeds
+                self.__roboclaw_driver.set_speeds(current_speeds.speed_front_left, current_speeds.speed_front_right,
+                                                  current_speeds.speed_rear_left, current_speeds.speed_rear_right)
             time.sleep(self.interval)
 
 

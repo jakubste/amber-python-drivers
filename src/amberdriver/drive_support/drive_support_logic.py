@@ -299,11 +299,11 @@ class Limiter(object):
         except StopIteration:
             pass
 
-        speeds.speed_limited_by_scan = (speeds.linear_speed * speeds.radius_limited_by_scan) / speeds.radius
+        speeds.speed_limited_by_scan_rotational = (speeds.linear_speed * speeds.radius_limited_by_scan) / speeds.radius
 
     @staticmethod
-    def analyze_scan_forward(speeds, scan):
-        bond_angle = math.radians(20.0)
+    def analyze_scan(speeds, scan):
+        bond_angle = math.radians(45.0)
         min_distance_angle = -bond_angle
         min_distance = None
 
@@ -330,9 +330,7 @@ class Limiter(object):
                 robot_trajectory = self.compute_robot_trajectory(speeds)
                 self.order_scan(speeds, scan)
                 self.analyze_scan_rotational(speeds, scan, robot_trajectory)
-
-            else:
-                self.analyze_scan_forward(speeds, scan)
+            self.analyze_scan(speeds, scan)
 
     @staticmethod
     def compute_factor_due_to_motion(motion):
@@ -409,6 +407,9 @@ class Limiter(object):
             if hasattr(speeds, 'speed_limited_by_motion'):
                 if abs(speeds.linear_speed) > abs(speeds.speed_limited_by_motion):
                     factor *= abs(speeds.speed_limited_by_motion / speeds.linear_speed)
+            if hasattr(speeds, 'speed_limited_by_scan_rotational'):
+                if abs(speeds.linear_speed) > abs(speeds.speed_limited_by_scan_rotational):
+                    factor *= abs(speeds.speed_limited_by_scan_rotational / speeds.linear_speed)
             if hasattr(speeds, 'speed_limited_by_scan'):
                 if abs(speeds.linear_speed) > abs(speeds.speed_limited_by_scan):
                     factor *= abs(speeds.speed_limited_by_scan / speeds.linear_speed)

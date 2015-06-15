@@ -96,7 +96,7 @@ class DriveSupport(object):
 
     def set_speeds(self, front_left, front_right, rear_left, rear_right):
         current_timestamp = time.time()
-        if current_timestamp - self.__last_timestamp > 0.07:
+        if current_timestamp - self.__last_timestamp > 0.04:
             self.__last_timestamp = current_timestamp
             user_speeds = drive_support_logic.Speeds(front_left, front_right, rear_left, rear_right)
             self.__speeds_limiter(user_speeds)

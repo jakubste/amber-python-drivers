@@ -6,7 +6,7 @@ from ambercommon.common import runtime
 import os
 
 from amberdriver.tools import config
-from amberdriver.tools.logic import Value, LowPassFilter, sign, average, divide, subtract, multiply, add
+from amberdriver.tools.logic import Value, LowPassFilter, sign, average
 from amberdriver.tools import logic
 
 
@@ -469,11 +469,18 @@ class Stabilizer(object):
             if self.user_speeds is not None:
                 current_timestamp = time.time()
                 if self.last_speeds is not None:
-                    A = divide(subtract(self.user_speeds, self.last_speeds),
-                               subtract(self.user_speeds_timestamp, self.last_speeds_timestamp))
-                    B = subtract(self.user_speeds,
-                                 multiply(A, self.user_speeds_timestamp))
-                    current_speeds = add(multiply(A, current_timestamp), B)
+                    front_left_diff = self.user_speeds.speed_front_left - self.last_speeds.speed_front_left
+                    front_right_diff = self.user_speeds.speed_front_right - self.last_speeds.speed_front_right
+                    rear_left_diff = self.user_speeds.speed_rear_left - self.last_speeds.speed_rear_left
+                    rear_right_diff = self.user_speeds.speed_rear_right - self.last_speeds.speed_rear_right
+                    timestamp_diff = (self.user_speeds_timestamp - self.last_speeds_timestamp)
+                    timestamp_diff /= self.user_speeds_timestamp
+                    A = (front_left_diff / timestamp_diff, front_right_diff / timestamp_diff,
+                         rear_left_diff / timestamp_diff, rear_right_diff / timestamp_diff)
+                    B = (self.user_speeds.speed_front_left - A[0], self.user_speeds.speed_front_right - A[1],
+                         self.user_speeds.speed_rear_left - A[2], self.user_speeds.speed_rear_right - A[3])
+                    current_speeds = Speeds(A[0] * current_timestamp + B[0], A[1] * current_timestamp + B[1],
+                                            A[2] * current_timestamp + B[2], A[3] * current_timestamp + B[3])
                 else:
                     current_speeds = self.user_speeds
                 self.last_speeds = current_speeds

@@ -1,5 +1,4 @@
 import math
-import time
 import collections
 
 import os
@@ -40,43 +39,21 @@ def get_radius(left, right):
         return None
 
 
-def get_hard_limit(distance, soft_limit, hard_limit, max_speed):
-    return max_speed / (soft_limit - hard_limit) * float(distance) - \
-           (max_speed * hard_limit) / (soft_limit - hard_limit)
+def get_max_speed(max_speed, distance, soft_limit, hard_limit):
+    return max_speed * (distance - hard_limit) / (soft_limit - hard_limit)
 
 
-def get_soft_limit(current_speed, max_speed, soft_limit, hard_limit, alpha):
-    return alpha * soft_limit * (current_speed / max_speed) + hard_limit + 50.0
-
-
-""" Additional filter, etc. """
-
-
-class DelayFilter(object):
-    def __init__(self):
-        self.all_values = []
-
-    def __call__(self, values, delay=0.5):
-        current_timestamp = time.time()
-        self.all_values.append((tuple(values), current_timestamp))
-        filtered_values = filter(lambda (value, timestamp): timestamp < current_timestamp - delay, self.all_values)
-        if len(filtered_values) > 0:
-            for filtered_value in filtered_values:
-                self.all_values.remove(filtered_value)
-            return filtered_values[0][0]
-        return None
-
-
-def accel(A, B):
-    if abs(B.timestamp - A.timestamp) > 0.0:
-        return (B.linear_speed - A.linear_speed) / (B.linear_speed - A.timestamp)
-    return 0.0
+def get_soft_limit(current_speed, max_speed, soft_limit, hard_limit):
+    soft = 0.0
+    if current_speed < max_speed:
+        soft = (soft_limit - hard_limit) * (current_speed / max_speed)
+    return soft + hard_limit + 50.0
 
 
 """ Data analyzer """
 
 
-def compute_other_speeds(speeds, last_speeds):
+def compute_other_speeds(speeds, last_speeds=None):
     speeds.speed_left = average(speeds.speed_front_left, speeds.speed_rear_left)
     speeds.speed_right = average(speeds.speed_front_right, speeds.speed_rear_right)
     speeds.speed_front = average(speeds.speed_front_left, speeds.speed_front_right)
@@ -86,7 +63,10 @@ def compute_other_speeds(speeds, last_speeds):
                                   speeds.speed_front, speeds.speed_rear)
 
     speeds.radius = get_radius(speeds.speed_left, speeds.speed_right)
-    speeds.acceleration_forward = compute_acceleration(last_speeds)
+    if last_speeds is not None:
+        speeds.acceleration_forward = compute_acceleration(last_speeds)
+    else:
+        speeds.acceleration_forward = None
 
     if speeds.radius is not None and abs(speeds.radius) > 0.0:
         speeds.acceleration_side = math.pow(speeds.linear_speed, 2.0) / speeds.radius
@@ -119,6 +99,7 @@ class SpeedsAnalyzer(object):
         speeds.speed_rear_left, speeds.speed_rear_right = rear_left, rear_right
 
     def compute_other_speeds(self, speeds):
+        self.__last_speeds.append(speeds)
         compute_other_speeds(speeds, self.__last_speeds)
 
     def __call__(self, speeds):
@@ -265,12 +246,12 @@ class Limiter(object):
     @staticmethod
     def compute_robot_trajectory(speeds):
         circle = compute_circle(speeds.radius, speeds.linear_speed / speeds.radius * 10.0)
-        circle = sorted(circle, key=lambda (a, _): -sign(speeds.radius) * a)
+        circle = sorted(circle, key=lambda (a, _): a, reverse=(speeds.radius >= 0.0))
         return circle
 
     @staticmethod
-    def order_scan(speeds, scan):
-        sorted(scan.points, key=lambda (a, _): sign(speeds.radius) * a)
+    def order_scan(scan, reverse=False):
+        sorted(scan.points, key=lambda (a, _): a, reverse=reverse)
 
     @staticmethod
     def analyze_scan_rotational(speeds, scan, robot_trajectory):
@@ -299,8 +280,6 @@ class Limiter(object):
         except StopIteration:
             pass
 
-        speeds.speed_limited_by_scan_rotational = (speeds.linear_speed * speeds.radius_limited_by_scan) / speeds.radius
-
     @staticmethod
     def analyze_scan(speeds, scan):
         bond_angle = math.radians(45.0)
@@ -313,39 +292,42 @@ class Limiter(object):
                     min_distance = distance
                     min_distance_angle = angle
 
-        soft_limit = get_soft_limit(speeds.linear_speed,
-                                    MAX_SPEED, SOFT_LIMIT * 1.3, HARD_LIMIT * 1.3, DISTANCE_ALPHA)
-        hard_limit = get_hard_limit(min_distance, soft_limit,
-                                    HARD_LIMIT * 1.3, MAX_SPEED)
-
-        speeds.radius_limited_by_scan = None
-        speeds.speed_limited_by_scan = hard_limit
+        soft_limit = get_soft_limit(speeds.linear_speed, MAX_SPEED, SOFT_LIMIT * 1.3, HARD_LIMIT * 1.3)
+        if min_distance < soft_limit:
+            max_speed = get_max_speed(MAX_SPEED, min_distance, soft_limit, HARD_LIMIT)
+            if min_distance < HARD_LIMIT:
+                speeds.speed_limited_by_scan = 0.0
+            else:
+                speeds.speed_limited_by_scan = max_speed
 
     def limit_speed_due_to_distance(self, speeds):
         speeds.distance_factor = self.__distance_factor
 
         scan = self.__scan
         if scan is not None:
-            if speeds.radius is not None and abs(speeds.radius) > 0.0:
-                robot_trajectory = self.compute_robot_trajectory(speeds)
-                self.order_scan(speeds, scan)
-                self.analyze_scan_rotational(speeds, scan, robot_trajectory)
             self.analyze_scan(speeds, scan)
+            if speeds.radius is not None:
+                if abs(speeds.radius) <= 1.0:
+                    robot_trajectory = self.compute_robot_trajectory(speeds)
+                    self.order_scan(scan, speeds.radius < 0.0)
+                    self.analyze_scan_rotational(speeds, scan, robot_trajectory)
 
     @staticmethod
     def compute_factor_due_to_motion(motion):
         # value of forward acceleration could not be higher than 20 dm/s2
         # value of side acceleration could not be higher than 15 dm/s2
         if abs(motion.acceleration_forward) < 20.0 and abs(motion.acceleration_side) < 15.0:
-            acceleration_factor = (1 - abs(motion.acceleration_forward) / 20.0) * \
-                                  (1 - abs(motion.acceleration_side) / 15.0)
+            acceleration_factor = (1.0 - abs(motion.acceleration_forward) / 20.0) * \
+                                  (1.0 - abs(motion.acceleration_side) / 15.0)
         else:
             acceleration_factor = 0.0
+
         # value of rotational speed could not be higher than 1.8 rad/s
         if abs(motion.rotational_speed) < 1.8:
-            rotational_factor = (1 - abs(motion.rotational_speed) / 1.8)
+            rotational_factor = (1.0 - abs(motion.rotational_speed) / 1.8)
         else:
             rotational_factor = 0.0
+
         return acceleration_factor, rotational_factor
 
     @staticmethod
@@ -355,12 +337,6 @@ class Limiter(object):
                 delta_time = last_speeds[-1].timestamp - last_speeds[-2].timestamp
                 speeds.speed_limited_by_motion = MAX_ACCELERATION_FORWARD * delta_time + last_speeds[-2].linear_speed
 
-            else:
-                speeds.speed_limited_by_motion = last_speeds[-1].linear_speed
-
-        elif len(last_speeds) > 0:
-            speeds.speed_limited_by_motion = last_speeds[-1].linear_speed
-
     def limit_speed_due_to_motion(self, speeds):
         speeds.acceleration_factor = self.__acceleration_factor
         speeds.rotational_factor = self.__rotational_factor
@@ -369,68 +345,26 @@ class Limiter(object):
         if motion is not None:
             self.analyze_motion(speeds, motion, self.last_speeds)
 
-    @staticmethod
-    def compute_factor_due_to_speed(speeds):
-        return 1.0
-
-    def limit_speed_due_to_speed(self, speeds):
-        pass
-
-    def compute_other_values(self, speeds):
+    def compute_other_speeds(self, speeds):
         self.last_speeds.append(speeds)
         compute_other_speeds(speeds, self.last_speeds)
 
-    def detect_oscillation(self, speeds):
-        pass
-
-    @staticmethod
-    def compute_overall_factor(speeds):
-        factor = 0.0
-        weight = 0.0
-
-        if hasattr(speeds, 'rotational_factor'):
-            factor += Limiter.ROTATIONAL_FACTOR * abs(speeds.rotational_factor)
-            weight += Limiter.ROTATIONAL_FACTOR
-        if hasattr(speeds, 'acceleration_factor'):
-            factor += Limiter.ACCELERATION_FACTOR * abs(speeds.acceleration_factor)
-            weight += Limiter.ACCELERATION_FACTOR
-        if hasattr(speeds, 'distance_factor'):
-            factor += Limiter.DISTANCE_FACTOR * abs(speeds.distance_factor)
-            weight += Limiter.DISTANCE_FACTOR
-
-        if weight > 0.0:
-            factor /= weight
-        else:
-            factor = 1.0
-
-        if abs(speeds.linear_speed) > 0.0:
-            if hasattr(speeds, 'speed_limited_by_motion'):
-                if abs(speeds.linear_speed) > abs(speeds.speed_limited_by_motion):
-                    factor *= abs(speeds.speed_limited_by_motion / speeds.linear_speed)
-            if hasattr(speeds, 'speed_limited_by_scan_rotational'):
-                if abs(speeds.linear_speed) > abs(speeds.speed_limited_by_scan_rotational):
-                    factor *= abs(speeds.speed_limited_by_scan_rotational / speeds.linear_speed)
-            if hasattr(speeds, 'speed_limited_by_scan'):
-                if abs(speeds.linear_speed) > abs(speeds.speed_limited_by_scan):
-                    factor *= abs(speeds.speed_limited_by_scan / speeds.linear_speed)
-
-        return factor
-
-    @staticmethod
-    def apply_factor(speeds, factor):
-        speeds.speed_front_left *= factor
-        speeds.speed_front_right *= factor
-        speeds.speed_rear_left *= factor
-        speeds.speed_rear_right *= factor
-
     def __call__(self, speeds):
-        self.compute_other_values(speeds)
-        self.detect_oscillation(speeds)
+        self.compute_other_speeds(speeds)
+
         self.limit_speed_due_to_distance(speeds)
         self.limit_speed_due_to_motion(speeds)
-        self.limit_speed_due_to_speed(speeds)
-        factor = self.compute_overall_factor(speeds)
-        self.apply_factor(speeds, factor)
+
+        if hasattr(speeds, 'speed_limited_by_scan') and hasattr(speeds, 'speed_limited_by_motion'):
+            speed = min(speeds.speed_limited_by_scan, speeds.speed_limited_by_motion)
+            reduce_speed(speeds, speed)
+        elif hasattr(speeds, 'speed_limited_by_scan'):
+            reduce_speed(speeds, speeds.speed_limited_by_scan)
+        elif hasattr(speeds, 'speed_limited_by_motion'):
+            reduce_speed(speeds, speeds.speed_limited_by_motion)
+
+        if hasattr(speeds, 'radius_limited_by_scan'):
+            change_radius(speeds, speeds.radius_limited_by_scan)
 
     def update_scan(self, scan):
         self.__scan = scan
@@ -440,9 +374,43 @@ class Limiter(object):
         self.__motion = motion
         self.__acceleration_factor, self.__rotational_factor = self.compute_factor_due_to_motion(motion)
 
-    def update_measured_speeds(self, measured_speeds):
-        self.__measured_speeds = measured_speeds
-        self.__speed_factor = self.compute_factor_due_to_speed(measured_speeds)
+
+def change_radius(speeds, radius):
+    if radius is None:
+        return
+
+    if abs(radius) > 0.0:
+        if radius < 0.0:
+            # turn left
+            speed_left = speeds.speed_right * (2.0 * radius - ROBO_WIDTH) / (2.0 * radius + ROBO_WIDTH)
+            factor_for_left = abs(speed_left / speeds.speed_left)
+            speeds.speed_front_left = sign(speed_left) * factor_for_left * abs(speeds.speed_front_left)
+            speeds.speed_rear_left = sign(speed_left) * factor_for_left * abs(speeds.speed_rear_left)
+        else:
+            # turn right
+            speed_right = speeds.speed_left * (2.0 * radius - ROBO_WIDTH) / (2.0 * radius + ROBO_WIDTH)
+            factor_for_right = abs(speed_right / speeds.speed_right)
+            speeds.speed_front_right = sign(speed_right) * factor_for_right * abs(speeds.speed_rear_right)
+            speeds.speed_rear_right = sign(speed_right) * factor_for_right * abs(speeds.speed_rear_left)
+    else:
+        # rotate in place
+        if speeds.radius < 0:
+            # rotate in left
+            speeds.speed_front_left = -speeds.speed_front_right
+            speeds.speed_rear_left = -speeds.speed_rear_right
+        else:
+            # rotate in right
+            speeds.speed_front_right = -speeds.speed_front_left
+            speeds.speed_rear_right = -speeds.speed_rear_left
+
+
+def reduce_speed(speeds, speed):
+    if speeds.linear_speed > speed:
+        reduce_factor = speed / speeds.linear_speed
+        speeds.speed_front_left *= reduce_factor
+        speeds.speed_front_right *= reduce_factor
+        speeds.speed_rear_left *= reduce_factor
+        speeds.speed_rear_right *= reduce_factor
 
 
 """ Objects class """

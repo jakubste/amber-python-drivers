@@ -3,9 +3,7 @@ import logging.config
 import time
 
 import os
-
 from amberclient.common.listener import Listener
-
 from ambercommon.common import runtime
 
 from amberdriver.drive_support import drive_support_logic
@@ -86,7 +84,6 @@ class DriveSupport(object):
         while self.__is_active:
             measured_speeds = self.__roboclaw_driver.get_speeds()
             measured_speeds = self.__speeds_analyzer(measured_speeds)
-            self.__speeds_limiter.update_measured_speeds(measured_speeds)
             self.__measured_speeds = (measured_speeds.speed_front_left, measured_speeds.speed_front_right,
                                       measured_speeds.speed_rear_left, measured_speeds.speed_rear_right)
             time.sleep(0.2)

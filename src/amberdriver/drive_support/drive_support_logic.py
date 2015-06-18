@@ -355,6 +355,10 @@ class Limiter(object):
         self.limit_speed_due_to_distance(speeds)
         self.limit_speed_due_to_motion(speeds)
 
+        if hasattr(speeds, 'radius_limited_by_scan'):
+            change_radius(speeds, speeds.radius_limited_by_scan)
+            self.compute_other_speeds(speeds)
+
         if hasattr(speeds, 'speed_limited_by_scan') and hasattr(speeds, 'speed_limited_by_motion'):
             speed = min(speeds.speed_limited_by_scan, speeds.speed_limited_by_motion)
             reduce_speed(speeds, speed)
@@ -362,9 +366,6 @@ class Limiter(object):
             reduce_speed(speeds, speeds.speed_limited_by_scan)
         elif hasattr(speeds, 'speed_limited_by_motion'):
             reduce_speed(speeds, speeds.speed_limited_by_motion)
-
-        if hasattr(speeds, 'radius_limited_by_scan'):
-            change_radius(speeds, speeds.radius_limited_by_scan)
 
     def update_scan(self, scan):
         self.__scan = scan

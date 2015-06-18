@@ -7,9 +7,7 @@ import traceback
 from amberclient.ninedof.ninedof import NinedofProxy
 import os
 import serial
-
 from amberclient.common.amber_client import AmberClient
-
 from amberclient.hokuyo.hokuyo import HokuyoProxy
 
 from amberdriver.drive_support.drive_support import DriveSupport
@@ -79,10 +77,13 @@ if __name__ == '__main__':
                                                 name='error-monitor-thread')
         measuring_thread = threading.Thread(target=drive_support.measure_speeds_loop,
                                             name='measuring-thread')
+        driving_thread = threading.Thread(target=drive_support.driving_loop,
+                                          name='driving-thread')
 
         timeout_monitor_thread.start()
         error_monitor_thread.start()
         measuring_thread.start()
+        driving_thread.start()
 
         controller.run()
 

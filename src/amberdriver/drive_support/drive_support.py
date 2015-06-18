@@ -50,6 +50,7 @@ class DriveSupport(object):
 
         self.__is_active = True
         self.__last_timestamp = 0.0
+        self.__user_speeds = None
 
         self.__hokuyo_proxy = hokuyo_proxy
         self.__ninedof_proxy = ninedof_proxy
@@ -95,7 +96,13 @@ class DriveSupport(object):
         current_timestamp = time.time()
         if current_timestamp - self.__last_timestamp > 0.04:
             self.__last_timestamp = current_timestamp
-            user_speeds = drive_support_logic.Speeds(front_left, front_right, rear_left, rear_right)
-            self.__speeds_limiter(user_speeds)
-            self.__roboclaw_driver.set_speeds(user_speeds.speed_front_left, user_speeds.speed_front_right,
-                                              user_speeds.speed_rear_left, user_speeds.speed_rear_right)
+            self.__user_speeds = drive_support_logic.Speeds(front_left, front_right, rear_left, rear_right)
+
+    def driving_loop(self):
+        while self.__is_active:
+            user_speeds = self.__user_speeds
+            if user_speeds is not None:
+                self.__speeds_limiter(user_speeds)
+                self.__roboclaw_driver.set_speeds(user_speeds.speed_front_left, user_speeds.speed_front_right,
+                                                  user_speeds.speed_rear_left, user_speeds.speed_rear_right)
+                time.sleep(0.05)

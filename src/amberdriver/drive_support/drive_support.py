@@ -115,4 +115,5 @@ class DriveSupport(object):
                     self.__roboclaw_driver.set_speeds(user_speeds.speed_front_left, user_speeds.speed_front_right,
                                                       user_speeds.speed_rear_left, user_speeds.speed_rear_right)
                     sys.stderr.write('%s\n' % str(user_speeds))
+                    last_speed = user_speeds
             time.sleep(0.05)

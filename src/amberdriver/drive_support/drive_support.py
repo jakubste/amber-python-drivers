@@ -1,9 +1,12 @@
 import logging
 import logging.config
 import time
+import sys
 
 import os
+
 from amberclient.common.listener import Listener
+
 from ambercommon.common import runtime
 
 from amberdriver.drive_support import drive_support_logic
@@ -99,10 +102,14 @@ class DriveSupport(object):
             self.__user_speeds = drive_support_logic.Speeds(front_left, front_right, rear_left, rear_right)
 
     def driving_loop(self):
+        last_timestamp = 0.0
         while self.__is_active:
             user_speeds = self.__user_speeds
-            if user_speeds is not None:
-                self.__speeds_limiter(user_speeds)
-                self.__roboclaw_driver.set_speeds(user_speeds.speed_front_left, user_speeds.speed_front_right,
-                                                  user_speeds.speed_rear_left, user_speeds.speed_rear_right)
-                time.sleep(0.05)
+            if user_speeds is not None and user_speeds.timestamp > last_timestamp:
+                last_timestamp = user_speeds.timestamp
+                if user_speeds is not None:
+                    self.__speeds_limiter(user_speeds)
+                    self.__roboclaw_driver.set_speeds(user_speeds.speed_front_left, user_speeds.speed_front_right,
+                                                      user_speeds.speed_rear_left, user_speeds.speed_rear_right)
+                    sys.stderr.write('%s\n' % str(user_speeds))
+            time.sleep(0.05)

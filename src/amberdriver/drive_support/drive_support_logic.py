@@ -35,17 +35,18 @@ MAX_ACCELERATION_SIDE = float(config.MAX_ACCELERATION_SIDE)
 def get_radius(left, right):
     if abs(left - right) > 0.0:
         return (right * ROBO_WIDTH) / (left - right) + ROBO_WIDTH / 2.0
-    else:
-        return None
+    return None
 
 
 def get_max_speed(max_speed, distance, soft_limit, hard_limit):
-    return max_speed * (distance - hard_limit) / (soft_limit - hard_limit)
+    if abs(soft_limit - hard_limit) > 0.0:
+        return max_speed * (distance - hard_limit) / (soft_limit - hard_limit)
+    return None
 
 
 def get_soft_limit(current_speed, max_speed, soft_limit, hard_limit):
     soft = 0.0
-    if current_speed < max_speed:
+    if current_speed < max_speed and abs(max_speed) > 0.0:
         soft = (soft_limit - hard_limit) * (current_speed / max_speed)
     return soft + hard_limit + 50.0
 
@@ -187,15 +188,20 @@ def compute_acceleration(last_speeds):
     acceleration = 0.0
     if len(last_speeds) > 1:
         all_speeds_iter = iter(last_speeds)
+        count = 0
         try:
             prev_speeds = all_speeds_iter.next()
             while True:
                 speeds = all_speeds_iter.next()
-                acceleration += (
-                    (speeds.linear_speed - prev_speeds.linear_speed) / (speeds.timestamp - prev_speeds.timestamp))
+                if abs(speeds.timestamp - prev_speeds.timestamp) > 0.0:
+                    value = (speeds.linear_speed - prev_speeds.linear_speed) / (
+                    speeds.timestamp - prev_speeds.timestamp)
+                    acceleration += value
+                    count += 1
         except StopIteration:
             pass
-        return acceleration / (len(last_speeds) - 1.0)
+        if count > 0:
+            return acceleration / float(count)
     return 0.0
 
 
@@ -236,15 +242,23 @@ class Limiter(object):
             elif distance > 1200.0:
                 factor_cosines += w_c
                 factor_gauss += w_g
-        factor_cosines = factor_cosines / weights_cosines
-        factor_gauss = factor_gauss / weights_gauss
+        if abs(weights_cosines) > 0.0:
+            factor_cosines = factor_cosines / weights_cosines
+        else:
+            factor_cosines = 0.0
+        if abs(weights_gauss) > 0.0:
+            factor_gauss = factor_gauss / weights_gauss
+        else:
+            factor_gauss = 0.0
         return 0.4 * factor_cosines + 0.6 * factor_gauss
 
     @staticmethod
     def compute_robot_trajectory(speeds):
-        circle = compute_circle(speeds.radius, speeds.linear_speed / speeds.radius * 10.0)
-        circle = sorted(circle, key=lambda (a, _): a, reverse=(speeds.radius >= 0.0))
-        return circle
+        if speeds.radius > 0.0:
+            circle = compute_circle(speeds.radius, speeds.linear_speed / speeds.radius * 10.0)
+            circle = sorted(circle, key=lambda (a, _): a, reverse=(speeds.radius >= 0.0))
+            return circle
+        return []
 
     @staticmethod
     def order_scan(scan, reverse=False):
@@ -268,8 +282,9 @@ class Limiter(object):
                     prev_scan_distance = new_scan_distance
 
                 else:
-                    if scan_distance < robot_trajectory_distance * 0.8:
-                        radius = (robot_trajectory_distance * 0.8) / (2 * math.sin(robot_trajectory_angle))
+                    value = math.sin(robot_trajectory_angle)
+                    if scan_distance < robot_trajectory_distance * 0.8 and abs(value) > 0.0:
+                        radius = (robot_trajectory_distance * 0.8) / (2 * value)
                         if speeds.radius_limited_by_scan > radius:
                             speeds.radius_limited_by_scan = radius
                     (robot_trajectory_angle, robot_trajectory_distance) = robot_trajectory_iterator.next()
@@ -374,19 +389,21 @@ def change_radius(speeds, radius):
     if radius is None:
         return
 
-    if abs(radius) > 0.0:
+    if abs(radius) > 0.0 and abs(2.0 * radius + ROBO_WIDTH) > 0.0:
         if radius < 0.0:
             # turn left
             speed_left = speeds.speed_right * (2.0 * radius - ROBO_WIDTH) / (2.0 * radius + ROBO_WIDTH)
-            factor_for_left = abs(speed_left / speeds.speed_left)
-            speeds.speed_front_left = sign(speed_left) * factor_for_left * abs(speeds.speed_front_left)
-            speeds.speed_rear_left = sign(speed_left) * factor_for_left * abs(speeds.speed_rear_left)
+            if abs(speeds.speed_left) > 0.0:
+                factor_for_left = abs(speed_left / speeds.speed_left)
+                speeds.speed_front_left = sign(speed_left) * factor_for_left * abs(speeds.speed_front_left)
+                speeds.speed_rear_left = sign(speed_left) * factor_for_left * abs(speeds.speed_rear_left)
         else:
             # turn right
             speed_right = speeds.speed_left * (2.0 * radius - ROBO_WIDTH) / (2.0 * radius + ROBO_WIDTH)
-            factor_for_right = abs(speed_right / speeds.speed_right)
-            speeds.speed_front_right = sign(speed_right) * factor_for_right * abs(speeds.speed_rear_right)
-            speeds.speed_rear_right = sign(speed_right) * factor_for_right * abs(speeds.speed_rear_left)
+            if abs(speeds.speed_right) > 0.0:
+                factor_for_right = abs(speed_right / speeds.speed_right)
+                speeds.speed_front_right = sign(speed_right) * factor_for_right * abs(speeds.speed_rear_right)
+                speeds.speed_rear_right = sign(speed_right) * factor_for_right * abs(speeds.speed_rear_left)
     else:
         # rotate in place
         if speeds.radius < 0:
@@ -400,7 +417,7 @@ def change_radius(speeds, radius):
 
 
 def reduce_speed(speeds, speed):
-    if speeds.linear_speed > speed:
+    if speeds.linear_speed > speed and abs(speeds.linear_speed) > 0.0:
         reduce_factor = speed / speeds.linear_speed
         speeds.speed_front_left *= reduce_factor
         speeds.speed_front_right *= reduce_factor

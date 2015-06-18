@@ -98,14 +98,11 @@ class SpeedsAnalyzer(object):
         speeds.speed_front_left, speeds.speed_front_right = front_left, front_right
         speeds.speed_rear_left, speeds.speed_rear_right = rear_left, rear_right
 
-    def compute_other_speeds(self, speeds):
-        self.__last_speeds.append(speeds)
-        compute_other_speeds(speeds, self.__last_speeds)
-
     def __call__(self, speeds):
         speeds = self.get_speeds_data(speeds)
         self.filter_speeds(speeds)
-        self.compute_other_speeds(speeds)
+        self.__last_speeds.append(speeds)
+        compute_other_speeds(speeds, self.__last_speeds)
         return speeds
 
 
@@ -218,7 +215,7 @@ class Limiter(object):
         self.__acceleration_factor, self.__rotational_factor = 0.0, 0.0
         self.__speed_factor = 0.0
 
-        self.last_speeds = collections.deque(maxlen=20)
+        self.__last_speeds = collections.deque(maxlen=20)
 
     @staticmethod
     def compute_factor_due_to_distance(scan):
@@ -343,21 +340,18 @@ class Limiter(object):
 
         motion = self.__motion
         if motion is not None:
-            self.analyze_motion(speeds, motion, self.last_speeds)
-
-    def compute_other_speeds(self, speeds):
-        self.last_speeds.append(speeds)
-        compute_other_speeds(speeds, self.last_speeds)
+            self.analyze_motion(speeds, motion, self.__last_speeds)
 
     def __call__(self, speeds):
-        self.compute_other_speeds(speeds)
+        self.__last_speeds.append(speeds)
+        compute_other_speeds(speeds, self.__last_speeds)
 
         self.limit_speed_due_to_distance(speeds)
         self.limit_speed_due_to_motion(speeds)
 
         if hasattr(speeds, 'radius_limited_by_scan'):
             change_radius(speeds, speeds.radius_limited_by_scan)
-            self.compute_other_speeds(speeds)
+            compute_other_speeds(speeds, self.__last_speeds)
 
         if hasattr(speeds, 'speed_limited_by_scan') and hasattr(speeds, 'speed_limited_by_motion'):
             speed = min(speeds.speed_limited_by_scan, speeds.speed_limited_by_motion)

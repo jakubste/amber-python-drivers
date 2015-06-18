@@ -46,14 +46,17 @@ class DriveSupport(object):
 
         self.__scan_analyzer = logic.ScanAnalyzer()
         self.__motion_analyzer = drive_support_logic.MotionAnalyzer()
-        self.__speeds_analyzer = drive_support_logic.SpeedsAnalyzer()
+        self.__measured_speeds_analyzer = drive_support_logic.SpeedsAnalyzer()
+        self.__user_speeds_analyzer = drive_support_logic.SpeedsAnalyzer()
 
-        self.__speeds_limiter = drive_support_logic.Limiter()
-        self.__measured_speeds = (0, 0, 0, 0)
+        self.__distance_limiter = drive_support_logic.DistanceLimiter()
+        self.__motion_limiter = drive_support_logic.MotionLimiter()
+
+        self.__measured_speeds = None
+        self.__user_speeds = None
 
         self.__is_active = True
         self.__last_timestamp = 0.0
-        self.__user_speeds = None
 
         self.__hokuyo_proxy = hokuyo_proxy
         self.__ninedof_proxy = ninedof_proxy
@@ -78,35 +81,39 @@ class DriveSupport(object):
 
     def set_scan(self, scan):
         scan = self.__scan_analyzer(scan)
-        self.__speeds_limiter.update_scan(scan)
+        self.__distance_limiter.update_scan(scan)
 
     def set_motion(self, motion):
         motion = self.__motion_analyzer(motion)
-        self.__speeds_limiter.update_motion(motion)
+        self.__motion_limiter.update_motion(motion)
 
     def measure_speeds_loop(self):
         while self.__is_active:
             measured_speeds = self.__roboclaw_driver.get_speeds()
-            measured_speeds = self.__speeds_analyzer(measured_speeds)
-            self.__measured_speeds = (measured_speeds.speed_front_left, measured_speeds.speed_front_right,
-                                      measured_speeds.speed_rear_left, measured_speeds.speed_rear_right)
+            measured_speeds = self.__measured_speeds_analyzer(measured_speeds)
+            self.__measured_speeds = measured_speeds
             time.sleep(0.2)
 
     def get_speeds(self):
-        return self.__measured_speeds
+        return (self.__measured_speeds.speed_front_left, self.__measured_speeds.speed_front_right,
+                self.__measured_speeds.speed_rear_left, self.__measured_speeds.speed_rear_right)
 
     def set_speeds(self, front_left, front_right, rear_left, rear_right):
         current_timestamp = time.time()
-        if current_timestamp - self.__last_timestamp > 0.04:
+        if (current_timestamp - self.__last_timestamp) > 0.04:
             self.__last_timestamp = current_timestamp
-            self.__user_speeds = drive_support_logic.Speeds(front_left, front_right, rear_left, rear_right)
+            user_speeds = (front_left, front_right, rear_left, rear_right)
+            self.__user_speeds = self.__user_speeds_analyzer(user_speeds)
 
     def driving_loop(self):
         last_speed = None
         while self.__is_active:
             user_speeds = self.__user_speeds
             if user_speeds is not None and (last_speed is None or user_speeds.timestamp > last_speed.timestamp):
-                self.__speeds_limiter(user_speeds)
+
+                self.__motion_limiter(user_speeds)
+                self.__distance_limiter(user_speeds)
+
                 if last_speed is None or \
                                 abs(user_speeds.speed_front_left - last_speed.speed_front_left) > 5.0 or \
                                 abs(user_speeds.speed_front_right - last_speed.speed_front_right) > 5.0 or \
@@ -114,6 +121,8 @@ class DriveSupport(object):
                                 abs(user_speeds.speed_rear_right - last_speed.speed_rear_right) > 5.0:
                     self.__roboclaw_driver.set_speeds(user_speeds.speed_front_left, user_speeds.speed_front_right,
                                                       user_speeds.speed_rear_left, user_speeds.speed_rear_right)
-                    sys.stderr.write('%s\n' % str(user_speeds))
                     last_speed = user_speeds
+
+                    sys.stderr.write('%s\n' % str(user_speeds))
+
             time.sleep(0.05)

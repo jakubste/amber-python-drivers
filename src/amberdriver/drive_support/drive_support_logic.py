@@ -310,7 +310,7 @@ def limit_speed_rotational(speeds, scan, robot_trajectory):
     except StopIteration:
         pass
 
-    change_radius(speeds, radius)
+    change_radius(speeds, radius_limited_by_scan)
 
 
 def change_radius(speeds, radius):

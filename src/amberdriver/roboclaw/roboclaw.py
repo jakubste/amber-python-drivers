@@ -16,6 +16,8 @@ config.add_config_ini('%s/roboclaw.ini' % pwd)
 
 LOGGER_NAME = 'Roboclaw'
 
+MAX_SPEED = int(config.ROBOCLAW_MAX_SPEED)
+
 WHEEL_RADIUS = float(config.ROBOCLAW_WHEEL_RADIUS)
 PULSES_PER_REVOLUTION = float(config.ROBOCLAW_PULSES_PER_REVOLUTION)
 
@@ -728,6 +730,10 @@ class RoboclawDriver(object):
 
     def set_speeds(self, front_left, front_right, rear_left, rear_right):
         if not self.__driving_allowed:
+            return
+
+        if abs(front_left) > MAX_SPEED or abs(front_right) > MAX_SPEED or \
+                        abs(rear_left) > MAX_SPEED or abs(rear_right) > MAX_SPEED:
             return
 
         front_left = to_qpps(front_left)

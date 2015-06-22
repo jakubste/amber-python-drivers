@@ -264,21 +264,23 @@ def limit_speed(speeds, scan):
     scan.points = sorted(scan.points, key=lambda (a, _): a)
     for angle, distance in scan.points:
         if min_distance_angle < angle < max_angle:
-            if min_distance is None or min_distance > distance:
+            if 60.0 < distance < 5000.0 and (min_distance is None or min_distance > distance):
                 min_distance = distance
                 min_distance_angle = angle
 
-    if min_distance < HARD_DISTANCE_LIMIT:
-        speeds.speed_front_left = 0.0
-        speeds.speed_front_right = 0.0
-        speeds.speed_rear_left = 0.0
-        speeds.speed_rear_right = 0.0
-    else:
-        soft_distance_limit = compute_soft_distance_limit(speeds.linear_speed, MAX_SPEED,
-                                                          SOFT_DISTANCE_LIMIT * 1.3, HARD_DISTANCE_LIMIT * 1.3)
-        if min_distance < soft_distance_limit:
-            max_speed = compute_max_speed(MAX_SPEED, min_distance, soft_distance_limit, HARD_DISTANCE_LIMIT)
-            reduce_speed(speeds, max_speed)
+    if min_distance is not None:
+        if min_distance < HARD_DISTANCE_LIMIT:
+            if speeds.linear_speed > 0.0:
+                speeds.speed_front_left = 0.0
+                speeds.speed_front_right = 0.0
+                speeds.speed_rear_left = 0.0
+                speeds.speed_rear_right = 0.0
+        else:
+            soft_distance_limit = compute_soft_distance_limit(speeds.linear_speed, MAX_SPEED,
+                                                              SOFT_DISTANCE_LIMIT * 1.3, HARD_DISTANCE_LIMIT * 1.3)
+            if min_distance < soft_distance_limit:
+                max_speed = compute_max_speed(MAX_SPEED, min_distance, soft_distance_limit, HARD_DISTANCE_LIMIT)
+                reduce_speed(speeds, max_speed)
 
 
 def limit_speed_rotational(speeds, scan, robot_trajectory):

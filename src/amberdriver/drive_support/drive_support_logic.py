@@ -109,6 +109,13 @@ class Speeds(Value):
         self.speed_front_left, self.speed_front_right = front_left, front_right
         self.speed_rear_left, self.speed_rear_right = rear_left, rear_right
 
+        self.speed_left, self.speed_right, self.speed_front, self.speed_rear = None, None, None, None
+        self.linear_speed, self.rotational_speed = None, None
+        self.radius, self.acceleration_forward, self.acceleration_side = None, None, None
+
+        self.compute_other_speed(last_speeds)
+
+    def compute_other_speed(self, last_speeds=None):
         self.speed_left = average(self.speed_front_left, self.speed_rear_left)
         self.speed_right = average(self.speed_front_right, self.speed_rear_right)
         self.speed_front = average(self.speed_front_left, self.speed_front_right)
@@ -232,7 +239,8 @@ class DistanceLimiter(object):
         scan = self.__scan
         if scan is not None:
             limit_speed(speeds, scan)
-            if speeds.radius is not None and 0.0 < abs(speeds.radius):
+            if speeds.radius is not None and 0.0 < abs(speeds.radius) and \
+                            abs(speeds.speed_left - speeds.speed_right) > 25.0:
                 robot_trajectory = compute_robot_trajectory(speeds)
                 scan.points = sorted(scan.points, key=lambda (a, _): a, reverse=(speeds.radius < 0.0))
                 limit_speed_rotational(speeds, scan, robot_trajectory)
@@ -282,6 +290,8 @@ def limit_speed(speeds, scan):
                 max_speed = compute_max_speed(MAX_SPEED, min_distance, soft_distance_limit, HARD_DISTANCE_LIMIT)
                 reduce_speed(speeds, max_speed)
 
+        speeds.compute_other_speed()
+
 
 def limit_speed_rotational(speeds, scan, robot_trajectory):
     radius_limited_by_scan = speeds.radius
@@ -312,7 +322,8 @@ def limit_speed_rotational(speeds, scan, robot_trajectory):
     except StopIteration:
         pass
 
-    change_radius(speeds, radius_limited_by_scan)
+    if abs(radius_limited_by_scan - speeds.radius) > 25.0:
+        change_radius(speeds, radius_limited_by_scan)
 
 
 def change_radius(speeds, radius):
@@ -326,15 +337,19 @@ def change_radius(speeds, radius):
                 speed_left = speeds.speed_right * (2.0 * radius - ROBO_WIDTH) / (2.0 * radius + ROBO_WIDTH)
                 if abs(speeds.speed_left) > 0.0:
                     factor_for_left = abs(speed_left / speeds.speed_left)
-                    speeds.speed_front_left = sign(speed_left) * factor_for_left * abs(speeds.speed_front_left)
-                    speeds.speed_rear_left = sign(speed_left) * factor_for_left * abs(speeds.speed_rear_left)
+                    speeds.speed_front_left = sign(speeds.speed_front_left) * factor_for_left * \
+                                              abs(speeds.speed_front_left)
+                    speeds.speed_rear_left = sign(speeds.speed_rear_left) * factor_for_left * \
+                                             abs(speeds.speed_rear_left)
             else:
                 # turn right
                 speed_right = speeds.speed_left * (2.0 * radius - ROBO_WIDTH) / (2.0 * radius + ROBO_WIDTH)
                 if abs(speeds.speed_right) > 0.0:
                     factor_for_right = abs(speed_right / speeds.speed_right)
-                    speeds.speed_front_right = sign(speed_right) * factor_for_right * abs(speeds.speed_rear_right)
-                    speeds.speed_rear_right = sign(speed_right) * factor_for_right * abs(speeds.speed_rear_left)
+                    speeds.speed_front_right = sign(speeds.speed_front_right) * factor_for_right * \
+                                               abs(speeds.speed_front_right)
+                    speeds.speed_rear_right = sign(speeds.speed_rear_right) * factor_for_right * \
+                                              abs(speeds.speed_rear_right)
     else:
         # rotate in place
         if speeds.radius < 0:

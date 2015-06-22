@@ -4,9 +4,7 @@ import time
 import sys
 
 import os
-
 from amberclient.common.listener import Listener
-
 from ambercommon.common import runtime
 
 from amberdriver.drive_support import drive_support_logic
@@ -122,7 +120,11 @@ class DriveSupport(object):
                     self.__roboclaw_driver.set_speeds(user_speeds.speed_front_left, user_speeds.speed_front_right,
                                                       user_speeds.speed_rear_left, user_speeds.speed_rear_right)
                     last_speed = user_speeds
+                    sys.stderr.write('%s\n' % str(user_speeds))
 
+                elif abs(user_speeds.speed_front_left) < 5.0 and abs(user_speeds.speed_front_right) < 5.0 and \
+                                abs(user_speeds.speed_rear_left) < 5.0 and abs(user_speeds.speed_rear_right) < 5.0:
+                    self.__roboclaw_driver.set_speeds(0, 0, 0, 0)
                     sys.stderr.write('%s\n' % str(user_speeds))
 
             time.sleep(0.05)

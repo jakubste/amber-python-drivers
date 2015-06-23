@@ -238,6 +238,7 @@ class DistanceLimiter(object):
 
         scan = self.__scan
         if scan is not None:
+            avoid(speeds, scan)
             limit_speed(speeds, scan)
             if speeds.radius is not None and 0.0 < abs(speeds.radius) and \
                             abs(speeds.speed_left - speeds.speed_right) > 25.0:
@@ -262,6 +263,46 @@ class MotionLimiter(object):
         motion = self.__motion
         if motion is not None:
             pass
+
+
+def find_minimas_maximas_inters(scan):
+    minimas, maximas, inters = [], [], []
+    scan.points = sorted(scan.points, key=lambda (a, _): a)
+    scan_iterator = iter(scan.points)
+    try:
+        (prev_angle, prev_distance) = scan_iterator.next()
+        prev_diff = 0.0
+        while True:
+            (angle, distance) = scan_iterator.next()
+            diff = distance - prev_distance
+            if abs(diff - prev_diff) > 10.0:
+                inters.append(average(prev_angle, angle))
+            else:
+                if prev_diff < 0.0 < diff:
+                    maximas.append((prev_angle, prev_distance))
+                elif prev_diff > 0.0 > diff:
+                    minimas.append((prev_angle, prev_distance))
+            prev_diff = diff
+            (prev_angle, prev_distance) = (angle, distance)
+    except StopIteration:
+        pass
+    return minimas, maximas, inters
+
+
+def avoid(speeds, scan):
+    scan.points = sorted(scan.points, key=lambda (a, _): abs(a))
+    scan_iterator = iter(scan.points)
+    best_angle, best_distance = 0.0, 0.0
+    try:
+        while True:
+            (angle, distance) = scan_iterator.next()
+            if distance > best_distance:
+                best_angle = angle
+                best_distance = distance
+    except StopIteration:
+        pass
+
+    change_speed(speeds, best_angle)
 
 
 def limit_speed(speeds, scan):
@@ -289,8 +330,7 @@ def limit_speed(speeds, scan):
             if min_distance < soft_distance_limit:
                 max_speed = compute_max_speed(MAX_SPEED, min_distance, soft_distance_limit, HARD_DISTANCE_LIMIT)
                 reduce_speed(speeds, max_speed)
-
-        speeds.compute_other_speed()
+                speeds.compute_other_speed()
 
 
 def limit_speed_rotational(speeds, scan, robot_trajectory):
@@ -324,6 +364,7 @@ def limit_speed_rotational(speeds, scan, robot_trajectory):
 
     if abs(radius_limited_by_scan - speeds.radius) > 25.0:
         change_radius(speeds, radius_limited_by_scan)
+        speeds.compute_other_speed()
 
 
 def change_radius(speeds, radius):
@@ -375,6 +416,23 @@ def reduce_speed(speeds, speed):
         speeds.speed_front_right *= reduce_factor
         speeds.speed_rear_left *= reduce_factor
         speeds.speed_rear_right *= reduce_factor
+
+
+def change_speed(speeds, angle):
+    if abs(angle) < math.pi / 2.0:
+        if angle > 0.0:
+            speeds.speed_front_right = -4.0 * speeds.speed_front_left * angle / math.pi + speeds.speed_front_left
+            speeds.speed_rear_right = -4.0 * speeds.speed_rear_left * angle / math.pi + speeds.speed_rear_left
+        elif angle < 0.0:
+            speeds.speed_front_left = -4.0 * speeds.speed_front_right * angle / math.pi + speeds.speed_front_right
+            speeds.speed_rear_left = -4.0 * speeds.speed_rear_right * angle / math.pi + speeds.speed_rear_right
+    else:
+        if angle < 0.0:
+            speeds.speed_front_left = -speeds.speed_front_right
+            speeds.speed_rear_left = -speeds.speed_rear_right
+        else:
+            speeds.speed_front_right = -speeds.speed_front_left
+            speeds.speed_rear_right = -speeds.speed_rear_left
 
 
 def compute_factor_due_to_motion(motion):

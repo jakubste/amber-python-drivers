@@ -162,3 +162,24 @@ class Location(Value):
 
     def __str__(self):
         return 'location: x: %f, y: %f, angle: %f' % (self.x, self.y, self.angle)
+
+
+class ObstacleMapper(object):
+    def __init__(self):
+        self.__scan, self.__location = None, None
+        self.__data_grid = {}
+
+    def update_scan(self, scan):
+        self.__scan = scan
+        self.__update_map()
+
+    def update_location(self, location):
+        self.__location = location
+        self.__update_map()
+
+    def __update_map(self):
+        scan = self.__scan
+        location = self.__location
+        if scan is not None and location is not None:
+            scan.points = sorted(scan.points, key=lambda (a, _): a)
+            # transform scan

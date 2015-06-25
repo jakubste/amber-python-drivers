@@ -6,6 +6,7 @@ import math
 
 import traceback
 import os
+
 from ambercommon.common import runtime
 
 from amberclient.common.listener import Listener
@@ -64,6 +65,8 @@ class DriveToPoint(object):
 
         self.__is_active = True
         self.__driving_allowed = False
+
+        self.__locator = drive_to_point_logic.Locator()
 
         self.__speeds_filter = logic.LowPassFilter(0.5, 0.0, 0.0)
         self.__logger = logging.getLogger(LOGGER_NAME)
@@ -129,6 +132,7 @@ class DriveToPoint(object):
             current_location = self.__location_proxy.get_location()
             current_location = current_location.get_location()
             self.__current_location = current_location
+            self.__locator.update_absolute_location(self.__current_location)
 
             try:
                 sleep_interval = compute_sleep_interval(current_location[DriveToPoint.TIMESTAMP_FIELD],
@@ -139,6 +143,16 @@ class DriveToPoint(object):
 
             last_location = current_location
             time.sleep(sleep_interval)
+
+    def measuring_loop(self):
+        while self.__is_active:
+            motors_speed = self.__driver_proxy.get_current_motors_speed()
+            speed_left = logic.average(motors_speed.get_front_left_speed(),
+                                       motors_speed.get_rear_left_speed())
+            speed_right = logic.average(motors_speed.get_front_right_speed(),
+                                        motors_speed.get_rear_right_speed())
+            self.__locator.calculate_relative_location(speed_left, speed_right)
+            time.sleep(0.09)
 
     def driving_loop(self):
         driving = False
@@ -169,12 +183,10 @@ class DriveToPoint(object):
     def __drive_to(self, target, next_targets_timestamp):
         self.__logger.info('Drive to %s', str(target))
 
-        sleep_interval = 0.5
-
-        location = self.__current_location
+        location = self.__locator.get_location()
         while location is None:
-            time.sleep(sleep_interval)
-            location = self.__current_location
+            time.sleep(0.2)
+            location = self.__locator.get_location()
 
         while not DriveToPoint.target_reached(location, target) and self.__driving_allowed and self.__is_active \
                 and not self.__next_targets_timestamp > next_targets_timestamp:
@@ -196,15 +208,8 @@ class DriveToPoint(object):
             left, right = int(left), int(right)
             self.__driver_proxy.send_motors_command(left, right, left, right)
 
-            time.sleep(sleep_interval)
-            old_location = location
-            location = self.__current_location
-            try:
-                sleep_interval = compute_sleep_interval(location[DriveToPoint.TIMESTAMP_FIELD],
-                                                        old_location[DriveToPoint.TIMESTAMP_FIELD],
-                                                        sleep_interval)
-            except TypeError:
-                traceback.print_exc()
+            time.sleep(0.2)
+            location = self.__locator.get_location()
 
         self.__logger.info('Target %s reached', str(target))
 
@@ -237,13 +242,12 @@ class DriveToPoint(object):
     def compute_speed(self, location, target):
         target_x, target_y, _ = target
 
-        location_x, location_y, _, location_angle, _ = location
+        location_x, location_y, location_angle, = location.x, location.y, location.angle
 
         if location_x is None or location_y is None or location_angle is None:
             # sth wrong, stop!
             return 0.0, 0.0
 
-        location_trust_level = logic.compute_location_trust(location)
         location_angle = drive_to_point_logic.normalize_angle(location_angle)
 
         diff_y = target_y - location_y
@@ -253,10 +257,6 @@ class DriveToPoint(object):
         drive_angle = drive_to_point_logic.normalize_angle(drive_angle)
         drive_angle = -drive_angle  # mirrored map
         drive_distance = math.sqrt(diff_y * diff_y + diff_x * diff_x) * 1000.0
-
-        if location_trust_level < 0.3:
-            # bad, stop it now
-            return 0.0, 0.0
 
         factor = -math.pow(0.997, drive_distance) + 1.0
         alpha = 0.17453292519943295 + factor * 0.3490658503988659
@@ -275,11 +275,6 @@ class DriveToPoint(object):
             # drive on turn
             left = MAX_SPEED - DriveToPoint.compute_change(drive_angle, math.pi / beta)
             right = MAX_SPEED + DriveToPoint.compute_change(drive_angle, math.pi / beta)
-
-        if location_trust_level < 0.8:
-            # control situation
-            left *= location_trust_level
-            right *= location_trust_level
 
         _left, _right = self.__speeds_filter(abs(left), abs(right))
         left, right = sign(left) * _left, sign(right) * _right

@@ -5,6 +5,7 @@ import sys
 
 import os
 from amberclient.common.listener import Listener
+
 from ambercommon.common import runtime
 
 from amberdriver.drive_support import drive_support_logic
@@ -103,23 +104,12 @@ class DriveSupport(object):
         while self.__is_active:
             user_speeds = self.__user_speeds
             if user_speeds is not None and (last_speed is None or user_speeds.timestamp > last_speed.timestamp):
-
                 self.__motion_limiter(user_speeds)
                 self.__distance_limiter(user_speeds)
 
-                if last_speed is None or \
-                                abs(user_speeds.speed_front_left - last_speed.speed_front_left) > 5.0 or \
-                                abs(user_speeds.speed_front_right - last_speed.speed_front_right) > 5.0 or \
-                                abs(user_speeds.speed_rear_left - last_speed.speed_rear_left) > 5.0 or \
-                                abs(user_speeds.speed_rear_right - last_speed.speed_rear_right) > 5.0:
-                    self.__roboclaw_driver.set_speeds(user_speeds.speed_front_left, user_speeds.speed_front_right,
-                                                      user_speeds.speed_rear_left, user_speeds.speed_rear_right)
-                    last_speed = user_speeds
-                    sys.stderr.write('%s\n' % str(user_speeds))
-
-                elif abs(user_speeds.speed_front_left) < 5.0 and abs(user_speeds.speed_front_right) < 5.0 and \
-                                abs(user_speeds.speed_rear_left) < 5.0 and abs(user_speeds.speed_rear_right) < 5.0:
-                    self.__roboclaw_driver.set_speeds(0, 0, 0, 0)
-                    sys.stderr.write('stop!\n')
+                self.__roboclaw_driver.set_speeds(user_speeds.speed_front_left, user_speeds.speed_front_right,
+                                                  user_speeds.speed_rear_left, user_speeds.speed_rear_right)
+                last_speed = user_speeds
+                sys.stderr.write('%s\n' % str(user_speeds))
 
             time.sleep(0.07)

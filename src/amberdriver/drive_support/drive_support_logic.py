@@ -7,7 +7,6 @@ from amberdriver.tools import config
 from amberdriver.tools.logic import Value, LowPassFilter, sign, average
 from amberdriver.tools import logic
 
-
 __author__ = 'paoolo'
 
 pwd = os.path.dirname(os.path.abspath(__file__))
@@ -234,7 +233,7 @@ class DistanceLimiter(object):
         self.__distance_factor = compute_factor_due_to_distance(scan)
 
     def __call__(self, speeds):
-        speeds.distance_factor = self.__distance_factor
+        apply_factor(speeds, self.__distance_factor)
 
         scan = self.__scan
         if scan is not None:
@@ -257,12 +256,20 @@ class MotionLimiter(object):
         self.__acceleration_factor, self.__rotational_factor = compute_factor_due_to_motion(motion)
 
     def __call__(self, speeds):
-        speeds.acceleration_factor = self.__acceleration_factor
-        speeds.rotational_factor = self.__rotational_factor
+        apply_factor(speeds, self.__acceleration_factor)
+        apply_factor(speeds, self.__rotational_factor)
 
         motion = self.__motion
         if motion is not None:
             pass
+
+
+def apply_factor(speeds, factor):
+    if 0.0 <= factor <= 1.0:
+        speeds.speed_front_left *= factor
+        speeds.speed_front_right *= factor
+        speeds.speed_rear_left *= factor
+        speeds.speed_rear_right *= factor
 
 
 def find_minimas_maximas_inters(scan):
@@ -292,17 +299,18 @@ def find_minimas_maximas_inters(scan):
 def avoid(speeds, scan):
     scan.points = sorted(scan.points, key=lambda (a, _): abs(a))
     scan_iterator = iter(scan.points)
-    best_angle, best_distance = 0.0, 0.0
+    best_angle, best_distance = 0.0, 50.0
     try:
         while True:
             (angle, distance) = scan_iterator.next()
-            if distance > best_distance:
+            if 1200.0 > distance > best_distance and angle < 45.0:
                 best_angle = angle
                 best_distance = distance
     except StopIteration:
         pass
 
-    change_speed(speeds, best_angle)
+    if speeds.speed_left * speeds.speed_right > 0.0:
+        change_speed(speeds, math.radians(best_angle))
 
 
 def limit_speed(speeds, scan):

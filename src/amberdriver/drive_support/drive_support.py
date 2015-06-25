@@ -5,12 +5,10 @@ import sys
 
 import os
 from amberclient.common.listener import Listener
-
 from ambercommon.common import runtime
 
 from amberdriver.drive_support import drive_support_logic
 from amberdriver.tools import logic, config
-
 
 __author__ = 'paoolo'
 
@@ -55,7 +53,6 @@ class DriveSupport(object):
         self.__user_speeds = None
 
         self.__is_active = True
-        self.__last_timestamp = 0.0
 
         self.__hokuyo_proxy = hokuyo_proxy
         self.__ninedof_proxy = ninedof_proxy
@@ -98,11 +95,8 @@ class DriveSupport(object):
                 self.__measured_speeds.speed_rear_left, self.__measured_speeds.speed_rear_right)
 
     def set_speeds(self, front_left, front_right, rear_left, rear_right):
-        current_timestamp = time.time()
-        if (current_timestamp - self.__last_timestamp) > 0.04:
-            self.__last_timestamp = current_timestamp
-            user_speeds = (front_left, front_right, rear_left, rear_right)
-            self.__user_speeds = self.__user_speeds_analyzer(user_speeds)
+        user_speeds = (front_left, front_right, rear_left, rear_right)
+        self.__user_speeds = self.__user_speeds_analyzer(user_speeds)
 
     def driving_loop(self):
         last_speed = None
@@ -128,4 +122,4 @@ class DriveSupport(object):
                     self.__roboclaw_driver.set_speeds(0, 0, 0, 0)
                     sys.stderr.write('stop!\n')
 
-            time.sleep(0.05)
+            time.sleep(0.07)

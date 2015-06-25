@@ -230,7 +230,7 @@ class DriveToPoint(object):
     @staticmethod
     def target_reached(location, target):
         target_x, target_y, target_radius = target
-        location_x, location_y, _, _, _ = location
+        location_x, location_y = location.x, location.y
         try:
             diff_x = location_x - target_x
             diff_y = location_y - target_y

@@ -6,7 +6,6 @@ import os
 from amberdriver.tools import config
 from amberdriver.tools.logic import Value, convert_grid_to_polar, convert_polar_to_grid
 
-
 __author__ = 'paoolo'
 
 pwd = os.path.dirname(os.path.abspath(__file__))
@@ -108,7 +107,7 @@ class Locator(object):
         return delta_timestamp
 
     def update_absolute_location(self, location):
-        x, y, probability, angle, _ = location.get_location()
+        x, y, probability, angle, _ = location
         self.__absolute_x, self.__absolute_y, self.__absolute_angle = x, y, angle
         self.__absolute_probability = probability
         if self.__absolute_probability > 0.9:

@@ -4,6 +4,7 @@ import time
 import sys
 
 import os
+
 from amberclient.common.listener import Listener
 
 from ambercommon.common import runtime
@@ -92,8 +93,11 @@ class DriveSupport(object):
             time.sleep(0.2)
 
     def get_speeds(self):
-        return (self.__measured_speeds.speed_front_left, self.__measured_speeds.speed_front_right,
-                self.__measured_speeds.speed_rear_left, self.__measured_speeds.speed_rear_right)
+        if self.__measured_speeds is not None:
+            return (self.__measured_speeds.speed_front_left, self.__measured_speeds.speed_front_right,
+                    self.__measured_speeds.speed_rear_left, self.__measured_speeds.speed_rear_right)
+        else:
+            return 0, 0, 0, 0
 
     def set_speeds(self, front_left, front_right, rear_left, rear_right):
         user_speeds = (front_left, front_right, rear_left, rear_right)

@@ -7,12 +7,12 @@ import math
 import traceback
 import os
 from ambercommon.common import runtime
+
 from amberclient.common.listener import Listener
 
 from amberdriver.drive_to_point import drive_to_point_logic
 from amberdriver.tools import logic, config, bound_sleep_interval
 from amberdriver.tools.logic import sign
-
 
 __author__ = 'paoolo'
 
@@ -258,13 +258,14 @@ class DriveToPoint(object):
             # bad, stop it now
             return 0.0, 0.0
 
-        beta = math.pow(0.999, drive_distance) * 2.792526803190927 + 0.5235987755982988
-        alpha = math.pow(0.999, drive_distance) * 1.3962634015954636 + 0.2617993877991494
+        factor = -math.pow(0.997, drive_distance) + 1.0
+        alpha = 0.17453292519943295 + factor * 0.3490658503988659
+        beta = 1.0471975511965976 + factor * 0.5235987755982988
 
         if abs(drive_angle) < alpha:  # 10st
             # drive normal
             left, right = MAX_SPEED, MAX_SPEED
-        elif abs(drive_angle) > beta:
+        elif abs(drive_angle) > beta:  # 60st
             # rotate in place
             left = -MAX_SPEED
             right = MAX_SPEED
@@ -284,7 +285,6 @@ class DriveToPoint(object):
         left, right = sign(left) * _left, sign(right) * _right
 
         return left, right
-
 
     @staticmethod
     def compute_change(drive_angle, driving_alpha):

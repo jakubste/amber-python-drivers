@@ -27,22 +27,17 @@ SCANNER_DIST_OFFSET = float(config.SCANNER_DIST_OFFSET)
 
 MAX_ACCELERATION_FORWARD = float(config.MAX_ACCELERATION_FORWARD)
 MAX_ACCELERATION_SIDE = float(config.MAX_ACCELERATION_SIDE)
+MAX_ROTATIONAL_SPEED = float(config.MAX_ROTATIONAL_SPEED)
+
+
+def get_angle(left, right, robo_width):
+    return math.atan2(left - right, float(robo_width))
 
 
 def compute_max_speed(max_speed, distance, soft_limit, hard_limit):
-    if soft_limit > 0.0 and hard_limit > 0.0:
-        if soft_limit - hard_limit > 0.0:
-            return max_speed * (distance - hard_limit) / (soft_limit - hard_limit)
-        else:
-            return max_speed * distance / hard_limit
+    if 0.0 < soft_limit and 0.0 < hard_limit < soft_limit:
+        return max_speed * (distance - hard_limit) / (soft_limit - hard_limit)
     return 0.0
-
-
-def compute_soft_distance_limit(current_speed, max_speed, soft_limit, hard_limit):
-    distance = 0.0
-    if current_speed < max_speed and abs(max_speed) > 0.0:
-        distance = (soft_limit - hard_limit) * (current_speed / max_speed)
-    return distance + hard_limit + 50.0
 
 
 def compute_circle(radius, stop_angle):
@@ -314,13 +309,13 @@ def avoid(speeds, scan):
 
 
 def limit_speed(speeds, scan):
-    max_angle = math.radians(45.0)
-    min_distance_angle = -max_angle
+    center_angle = get_angle(speeds.speed_left, speeds.speed_right, ROBO_WIDTH)
+    min_distance_angle = center_angle - 30.0
     min_distance = None
 
     scan.points = sorted(scan.points, key=lambda (a, _): a)
     for angle, distance in scan.points:
-        if min_distance_angle < angle < max_angle:
+        if min_distance_angle < angle < center_angle + 30.0:
             if 60.0 < distance < 5000.0 and (min_distance is None or min_distance > distance):
                 min_distance = distance
                 min_distance_angle = angle
@@ -333,10 +328,8 @@ def limit_speed(speeds, scan):
                 speeds.speed_rear_left = 0.0
                 speeds.speed_rear_right = 0.0
         else:
-            soft_distance_limit = compute_soft_distance_limit(speeds.linear_speed, MAX_SPEED,
-                                                              SOFT_DISTANCE_LIMIT * 1.3, HARD_DISTANCE_LIMIT * 1.3)
-            if min_distance < soft_distance_limit:
-                max_speed = compute_max_speed(MAX_SPEED, min_distance, soft_distance_limit, HARD_DISTANCE_LIMIT)
+            if min_distance < SOFT_DISTANCE_LIMIT:
+                max_speed = compute_max_speed(MAX_SPEED, min_distance, SOFT_DISTANCE_LIMIT, HARD_DISTANCE_LIMIT)
                 reduce_speed(speeds, max_speed)
                 speeds.compute_other_speed()
 
@@ -444,17 +437,18 @@ def change_speed(speeds, angle):
 
 
 def compute_factor_due_to_motion(motion):
-    # value of forward acceleration could not be higher than 20 dm/s2
-    # value of side acceleration could not be higher than 15 dm/s2
-    if abs(motion.acceleration_forward) < 20.0 and abs(motion.acceleration_side) < 15.0:
-        acceleration_factor = (1.0 - abs(motion.acceleration_forward) / 20.0) * \
-                              (1.0 - abs(motion.acceleration_side) / 15.0)
+    # value of forward acceleration could not be higher than 30 dm/s2
+    # value of side acceleration could not be higher than 20 dm/s2
+    if abs(motion.acceleration_forward) < MAX_ACCELERATION_FORWARD and \
+                    abs(motion.acceleration_side) < MAX_ACCELERATION_SIDE:
+        acceleration_factor = (1.0 - abs(motion.acceleration_forward) / MAX_ACCELERATION_FORWARD) * \
+                              (1.0 - abs(motion.acceleration_side) / MAX_ACCELERATION_SIDE)
     else:
         acceleration_factor = 0.0
 
-    # value of rotational speed could not be higher than 1.8 rad/s
-    if abs(motion.rotational_speed) < 1.8:
-        rotational_factor = (1.0 - abs(motion.rotational_speed) / 1.8)
+    # value of rotational speed could not be higher than 6.28 rad/s
+    if abs(motion.rotational_speed) < MAX_ROTATIONAL_SPEED:
+        rotational_factor = (1.0 - abs(motion.rotational_speed) / MAX_ROTATIONAL_SPEED)
     else:
         rotational_factor = 0.0
 
@@ -467,18 +461,19 @@ def compute_factor_due_to_distance(scan):
     weights_cosines = 0.0
     weights_gauss = 0.0
     for angle, distance in scan.points:
-        w_c = math.cos(3.0 / 4.0 * angle)
+        w_c = math.cos(3.0 / 4.0 * math.radians(angle))
         w_g = math.exp(-math.pow(angle, 2.0))
-        weights_cosines += w_c
-        weights_gauss += w_g
-        if 300.0 < distance <= 1200.0:
-            f_c = (distance / 1200.0) - 0.25
-            f_g = (distance / 1200.0) - 0.25
-            factor_cosines += (w_c * f_c)
-            factor_gauss += (w_g * f_g)
-        elif 1200.0 < distance:
-            factor_cosines += w_c
-            factor_gauss += w_g
+        if 200.0 < distance:
+            weights_cosines += w_c
+            weights_gauss += w_g
+            if 200.0 < distance <= 1200.0:
+                f_c = (distance / 1000.0) - 0.2
+                f_g = (distance / 1000.0) - 0.2
+                factor_cosines += (w_c * f_c)
+                factor_gauss += (w_g * f_g)
+            elif 1200.0 < distance < 5600.0:
+                factor_cosines += w_c
+                factor_gauss += w_g
     if abs(weights_cosines) > 0.0:
         factor_cosines = factor_cosines / weights_cosines
     else:

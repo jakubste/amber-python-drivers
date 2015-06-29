@@ -4,9 +4,7 @@ import time
 import sys
 
 import os
-
 from amberclient.common.listener import Listener
-
 from ambercommon.common import runtime
 
 from amberdriver.drive_support import drive_support_logic
@@ -90,7 +88,7 @@ class DriveSupport(object):
             measured_speeds = self.__roboclaw_driver.get_speeds()
             measured_speeds = self.__measured_speeds_analyzer(measured_speeds)
             self.__measured_speeds = measured_speeds
-            time.sleep(0.2)
+            time.sleep(0.09)
 
     def get_speeds(self):
         if self.__measured_speeds is not None:
@@ -108,12 +106,15 @@ class DriveSupport(object):
         while self.__is_active:
             user_speeds = self.__user_speeds
             if user_speeds is not None and (last_speed is None or user_speeds.timestamp > last_speed.timestamp):
-                self.__motion_limiter(user_speeds)
+                sys.stderr.write('before: %s\n' % str(user_speeds))
                 self.__distance_limiter(user_speeds)
+                self.__motion_limiter(user_speeds)
 
+                ts1 = time.time()
                 self.__roboclaw_driver.set_speeds(user_speeds.speed_front_left, user_speeds.speed_front_right,
                                                   user_speeds.speed_rear_left, user_speeds.speed_rear_right)
+                ts2 = time.time()
                 last_speed = user_speeds
-                sys.stderr.write('%s\n' % str(user_speeds))
+                sys.stderr.write('after(%fms): %s\n' % ((ts2 - ts1) * 1000.0, str(user_speeds)))
 
             time.sleep(0.07)

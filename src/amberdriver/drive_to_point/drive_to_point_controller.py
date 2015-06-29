@@ -2,8 +2,8 @@ import logging
 import logging.config
 import sys
 import threading
-import traceback
 
+import traceback
 import os
 from amberclient.hokuyo.hokuyo import HokuyoProxy
 from amberclient.common.amber_client import AmberClient
@@ -16,7 +16,6 @@ from amberdriver.drive_to_point import drive_to_point_pb2
 from amberdriver.drive_to_point.drive_to_point import DriveToPoint
 from amberdriver.null.null import NullController
 from amberdriver.tools import config
-
 
 __author__ = 'paoolo'
 

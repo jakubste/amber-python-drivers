@@ -105,9 +105,9 @@ class ScanAnalyzer(object):
 """ Objects class """
 
 
-class Value():
-    def __init__(self):
-        self.timestamp = time.time() * 1000.0
+class Value(object):
+    def __init__(self, timestamp=None):
+        self.timestamp = time.time() * 1000.0 if timestamp is None else timestamp
 
 
 class Scan(Value):

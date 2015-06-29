@@ -9,7 +9,6 @@ import os
 
 from amberdriver.tools import config
 
-
 pwd = os.path.dirname(os.path.abspath(__file__))
 logging.config.fileConfig('%s/roboclaw.ini' % pwd)
 config.add_config_ini('%s/roboclaw.ini' % pwd)
@@ -644,7 +643,8 @@ class RoboclawDriver(object):
         self.__serial_port = serial_port
         self.__front, self.__rear = front, rear
 
-        self.__roboclaw_lock = threading.RLock()
+        self.__roboclaw_read_lock = threading.RLock()
+        self.__roboclaw_write_lock = threading.RLock()
         self.__timeout_lock = threading.Lock()
 
         self.__motors_stop_timer_enabled = False
@@ -688,7 +688,7 @@ class RoboclawDriver(object):
         self.__led2_gpio.close()
 
     def get_currents(self):
-        self.__roboclaw_lock.acquire()
+        self.__roboclaw_read_lock.acquire()
         try:
             front_right_current, front_left_current = self.__front.read_motor_currents()
             rear_right_current, rear_left_current = self.__rear.read_motor_currents()
@@ -696,30 +696,30 @@ class RoboclawDriver(object):
             return (front_right_current / 10.0, front_left_current / 10.0,
                     rear_right_current / 10.0, rear_left_current / 10.0)
         finally:
-            self.__roboclaw_lock.release()
+            self.__roboclaw_read_lock.release()
 
     def get_voltages(self):
-        self.__roboclaw_lock.acquire()
+        self.__roboclaw_read_lock.acquire()
         try:
             front_voltage = self.__front.read_main_battery_voltage_level()
             rear_voltage = self.__rear.read_main_battery_voltage_level()
 
             return front_voltage / 10.0, rear_voltage / 10.0
         finally:
-            self.__roboclaw_lock.release()
+            self.__roboclaw_read_lock.release()
 
     def get_speeds(self):
         if not self.__driving_allowed:
             return 0, 0, 0, 0
 
-        self.__roboclaw_lock.acquire()
+        self.__roboclaw_read_lock.acquire()
         try:
             front_right, _ = self.__front.read_speed_m1()
             front_left, _ = self.__front.read_speed_m2()
             rear_right, _ = self.__rear.read_speed_m1()
             rear_left, _ = self.__rear.read_speed_m2()
         finally:
-            self.__roboclaw_lock.release()
+            self.__roboclaw_read_lock.release()
 
         front_left = to_mmps(front_left)
         front_right = to_mmps(front_right)
@@ -743,27 +743,28 @@ class RoboclawDriver(object):
 
         self.__reset_timeouts()
 
-        self.__roboclaw_lock.acquire()
+        self.__roboclaw_write_lock.acquire()
         try:
             self.__green_led(False)
             self.__front.drive_mixed_with_signed_speed(front_right, front_left)
             self.__rear.drive_mixed_with_signed_speed(rear_right, rear_left)
-            self.__serial_port.flush()
+            # self.__serial_port.flush() # flush does not work properly, generate +15ms delays
             self.__green_led(True)
         finally:
-            self.__roboclaw_lock.release()
+            self.__roboclaw_write_lock.release()
 
     def stop(self):
-        self.__roboclaw_lock.acquire()
+        self.__roboclaw_write_lock.acquire()
         try:
             self.__front.drive_mixed_with_signed_speed(0, 0)
             self.__rear.drive_mixed_with_signed_speed(0, 0)
-            self.__serial_port.flush()
+            # self.__serial_port.flush() # flush does not work properly, generate +15ms delays
         finally:
-            self.__roboclaw_lock.release()
+            self.__roboclaw_write_lock.release()
 
     def __reset(self):
-        self.__roboclaw_lock.acquire()
+        self.__roboclaw_read_lock.acquire()
+        self.__roboclaw_write_lock.acquire()
         try:
             self.__driving_allowed = False
             self.__reset_gpio.write('1')
@@ -779,7 +780,8 @@ class RoboclawDriver(object):
             self.__setup()
             self.__driving_allowed = True
         finally:
-            self.__roboclaw_lock.release()
+            self.__roboclaw_read_lock.release()
+            self.__roboclaw_write_lock.release()
 
     def __setup(self):
         self.__front.set_pid_constants_m1(self.__p_const, self.__i_const, self.__d_const, self.__qpps_const)
@@ -819,14 +821,14 @@ class RoboclawDriver(object):
             time.sleep(0.1)
 
     def __read_error_codes(self):
-        self.__roboclaw_lock.acquire()
+        self.__roboclaw_read_lock.acquire()
         try:
             front_error_code = self.__front.read_error_state()
             rear_error_code = self.__rear.read_error_state()
             return front_error_code, rear_error_code
 
         finally:
-            self.__roboclaw_lock.release()
+            self.__roboclaw_read_lock.release()
 
     def __get_error_codes(self):
         front_error_codes, rear_error_codes = self.__read_error_codes()

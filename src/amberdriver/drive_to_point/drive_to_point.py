@@ -6,13 +6,11 @@ import math
 
 import traceback
 import os
-
 from ambercommon.common import runtime
-
 from amberclient.common.listener import Listener
 
 from amberdriver.drive_to_point import drive_to_point_logic
-from amberdriver.tools import logic, config, bound_sleep_interval
+from amberdriver.tools import logic, config
 from amberdriver.tools.logic import sign
 
 __author__ = 'paoolo'
@@ -24,19 +22,6 @@ config.add_config_ini('%s/drive_to_point.ini' % pwd)
 LOGGER_NAME = 'DriveToPoint'
 
 MAX_SPEED = float(config.DRIVE_TO_POINT_MAX_SPEED)
-
-
-def compute_sleep_interval(current_timestamp, last_timestamp, sleep_interval,
-                           max_interval=2.0, alpha=0.5):
-    """
-    compute_sleep_interval(current timestamp in ms, last timestamp in ms, actual sleep interval) -> new sleep interval
-    """
-    timestamp_interval = current_timestamp - last_timestamp
-    timestamp_interval /= 1000.0
-    if timestamp_interval < max_interval:
-        sleep_interval += alpha * (timestamp_interval - sleep_interval)
-        sleep_interval = bound_sleep_interval(sleep_interval)
-    return sleep_interval
 
 
 class ScanHandler(Listener):
@@ -121,38 +106,22 @@ class DriveToPoint(object):
             self.__targets_lock.release()
 
     def location_loop(self):
-        sleep_interval = 0.5
-
-        last_location = self.__location_proxy.get_location()
-        last_location = last_location.get_location()
-        self.__current_location = last_location
-
-        time.sleep(sleep_interval)
         while self.__is_active:
+            time.sleep(0.09)
             current_location = self.__location_proxy.get_location()
             current_location = current_location.get_location()
             self.__current_location = current_location
-            self.__locator.update_absolute_location(self.__current_location)
-
-            try:
-                sleep_interval = compute_sleep_interval(current_location[DriveToPoint.TIMESTAMP_FIELD],
-                                                        last_location[DriveToPoint.TIMESTAMP_FIELD],
-                                                        sleep_interval)
-            except TypeError:
-                traceback.print_exc()
-
-            last_location = current_location
-            time.sleep(sleep_interval)
+            self.__locator.update_absolute_location(current_location)
 
     def measuring_loop(self):
         while self.__is_active:
+            time.sleep(0.09)
             motors_speed = self.__driver_proxy.get_current_motors_speed()
             speed_left = logic.average(motors_speed.get_front_left_speed(),
                                        motors_speed.get_rear_left_speed())
             speed_right = logic.average(motors_speed.get_front_right_speed(),
                                         motors_speed.get_rear_right_speed())
             self.__locator.calculate_relative_location(speed_left, speed_right)
-            time.sleep(0.09)
 
     def driving_loop(self):
         driving = False
@@ -169,7 +138,7 @@ class DriveToPoint(object):
                 self.__stop()
                 driving = False
 
-            time.sleep(0.1)
+            time.sleep(0.09)
 
     def __get_next_target(self):
         self.__targets_lock.acquire()
@@ -184,10 +153,6 @@ class DriveToPoint(object):
         self.__logger.info('Drive to %s', str(target))
 
         location = self.__locator.get_location()
-        while location is None:
-            time.sleep(0.2)
-            location = self.__locator.get_location()
-
         while not DriveToPoint.target_reached(location, target) and self.__driving_allowed and self.__is_active \
                 and not self.__next_targets_timestamp > next_targets_timestamp:
             left, right = self.compute_speed(location, target)
@@ -208,7 +173,7 @@ class DriveToPoint(object):
             left, right = int(left), int(right)
             self.__driver_proxy.send_motors_command(left, right, left, right)
 
-            time.sleep(0.2)
+            time.sleep(0.07)
             location = self.__locator.get_location()
 
         self.__logger.info('Target %s reached', str(target))

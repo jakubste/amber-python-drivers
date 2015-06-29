@@ -13,7 +13,6 @@ from amberdriver.roboclaw import roboclaw_pb2
 from amberdriver.roboclaw.roboclaw import Roboclaw, RoboclawDriver
 from amberdriver.tools import serial_port, config
 
-
 __author__ = 'paoolo'
 
 pwd = os.path.dirname(os.path.abspath(__file__))

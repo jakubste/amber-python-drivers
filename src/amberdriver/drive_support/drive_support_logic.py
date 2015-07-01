@@ -31,7 +31,7 @@ MAX_ROTATIONAL_SPEED = float(config.MAX_ROTATIONAL_SPEED)
 
 
 def get_angle(left, right, robo_width):
-    return math.atan2(left - right, float(robo_width))
+    return math.atan2(left - right, float(robo_width)) * 0.8
 
 
 def compute_max_speed(max_speed, distance, soft_limit, hard_limit):
@@ -306,35 +306,55 @@ def find_minimas_maximas_inters(scan):
     return minimas, maximas, inters
 
 
-def avoid(speeds, scan):
-    scan.points = sorted(scan.points, key=lambda (a, _): abs(a))
-    scan_iterator = iter(scan.points)
-    best_angle, best_distance = 0.0, 50.0
-    try:
-        while True:
-            (angle, distance) = scan_iterator.next()
-            if 1200.0 > distance > best_distance and angle < 45.0:
-                best_angle = angle
-                best_distance = distance
-    except StopIteration:
-        pass
-
-    if speeds.speed_left * speeds.speed_right > 0.0:
-        change_speed(speeds, math.radians(best_angle))
-
-
-def limit_speed(speeds, scan):
-    center_angle = get_angle(speeds.speed_left, speeds.speed_right, ROBO_WIDTH)
+def get_min_distance(speeds, scan):
+    center_angle = math.degrees(get_angle(speeds.speed_left, speeds.speed_right, ROBO_WIDTH))
     min_distance_angle = center_angle - 30.0
     min_distance = None
 
-    scan.points = sorted(scan.points, key=lambda (a, _): a)
-    for angle, distance in scan.points:
+    for angle, distance in sorted(scan.points, key=lambda (a, _): a):
         if min_distance_angle < angle < center_angle + 30.0:
             if 60.0 < distance < 5000.0 and (min_distance is None or min_distance > distance):
                 min_distance = distance
                 min_distance_angle = angle
 
+    return min_distance_angle, min_distance
+
+
+def get_distance(scan, angle):
+    for _angle, distance in scan.points:
+        if abs(_angle - angle) < 0.353:
+            return distance
+    return 0.0
+
+
+def avoid(speeds, scan):
+    min_distance_angle, min_distance = get_min_distance(speeds, scan)
+    center_angle = math.degrees(get_angle(speeds.speed_left, speeds.speed_right, ROBO_WIDTH))
+    if min_distance < HARD_DISTANCE_LIMIT + 2.0 * ROBO_WIDTH:
+        best_distance = get_distance(scan, center_angle)
+        best_angle = center_angle
+        best_diff_angle = abs(center_angle - min_distance_angle)
+        for angle, distance in sorted(scan.points, key=lambda (a, _): abs(a - center_angle)):
+            if center_angle - 30.0 < angle < center_angle + 30.0:
+                diff_angle = abs(min_distance_angle - angle)
+                if distance > best_distance and diff_angle > best_diff_angle:
+                    best_distance = distance
+                    best_angle = angle
+                    best_diff_angle = diff_angle
+        if speeds.speed_left * speeds.speed_right > 0.0:
+            change_angle(speeds, math.radians(best_angle))
+            speeds.compute_other_speed()
+    elif min_distance < HARD_DISTANCE_LIMIT + ROBO_WIDTH:
+        if min_distance_angle > 0.0:
+            speeds.speed_front_left = -speeds.speed_front_right
+            speeds.speed_rear_left = -speeds.speed_rear_right
+        else:
+            speeds.speed_front_right = -speeds.speed_front_left
+            speeds.speed_rear_right = -speeds.speed_rear_left
+
+
+def limit_speed(speeds, scan):
+    min_distance_angle, min_distance = get_min_distance(speeds, scan)
     if min_distance is not None:
         if min_distance < HARD_DISTANCE_LIMIT:
             if speeds.linear_speed > 0.0:
@@ -434,21 +454,15 @@ def reduce_speed(speeds, speed):
         speeds.speed_rear_right *= reduce_factor
 
 
-def change_speed(speeds, angle):
-    if abs(angle) < math.pi / 2.0:
-        if angle > 0.0:
-            speeds.speed_front_right = -4.0 * speeds.speed_front_left * angle / math.pi + speeds.speed_front_left
-            speeds.speed_rear_right = -4.0 * speeds.speed_rear_left * angle / math.pi + speeds.speed_rear_left
-        elif angle < 0.0:
-            speeds.speed_front_left = -4.0 * speeds.speed_front_right * angle / math.pi + speeds.speed_front_right
-            speeds.speed_rear_left = -4.0 * speeds.speed_rear_right * angle / math.pi + speeds.speed_rear_right
-    else:
-        if angle < 0.0:
-            speeds.speed_front_left = -speeds.speed_front_right
-            speeds.speed_rear_left = -speeds.speed_rear_right
-        else:
-            speeds.speed_front_right = -speeds.speed_front_left
-            speeds.speed_rear_right = -speeds.speed_rear_left
+def change_angle(speeds, angle):
+    new_diff = ROBO_WIDTH * math.tan(angle)
+    old_diff = speeds.speed_left - speeds.speed_right
+    new_left = speeds.speed_left - old_diff / 2.0 + new_diff / 2.0
+    new_right = speeds.speed_right + old_diff / 2.0 - new_diff / 2.0
+    speeds.speed_front_left = speeds.speed_front_left * new_left / speeds.speed_left
+    speeds.speed_rear_left = speeds.speed_rear_left * new_left / speeds.speed_left
+    speeds.speed_front_right = speeds.speed_front_right * new_right / speeds.speed_right
+    speeds.speed_rear_right = speeds.speed_rear_right * new_right / speeds.speed_right
 
 
 def compute_factor_due_to_motion(motion):

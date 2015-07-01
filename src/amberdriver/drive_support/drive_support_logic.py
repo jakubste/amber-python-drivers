@@ -40,6 +40,20 @@ def compute_max_speed(max_speed, distance, soft_limit, hard_limit):
     return 0.0
 
 
+def compute_new_radius(speeds, scan):
+    radius = speeds.radius
+    if radius is not None and abs(radius) > 0.0:
+        for angle, distance in sorted(scan.points, key=lambda (a, d): a, reverse=(radius < 0.0)):
+            if 100.0 < distance < 5600.0:
+                if (radius < 0.0 and -45.0 < angle < 0.0) or (radius > 0.0 and 45.0 > angle > 0.0):
+                    _distance = 2.0 * radius * math.sin(math.radians(abs(angle)))
+                    if _distance > distance:
+                        _radius = 0.8 * radius * _distance / distance
+                        if _radius < radius:
+                            radius = _radius
+    return radius
+
+
 def compute_circle(radius, stop_angle):
     if radius < 0.0:
         start_angle = 0.0
@@ -233,12 +247,13 @@ class DistanceLimiter(object):
         scan = self.__scan
         if scan is not None:
             avoid(speeds, scan)
-            limit_speed(speeds, scan)
             if speeds.radius is not None and 0.0 < abs(speeds.radius) and \
                             abs(speeds.speed_left - speeds.speed_right) > 25.0:
-                robot_trajectory = compute_robot_trajectory(speeds)
-                scan.points = sorted(scan.points, key=lambda (a, _): a, reverse=(speeds.radius < 0.0))
-                limit_speed_rotational(speeds, scan, robot_trajectory)
+                new_radius = compute_new_radius(speeds, scan)
+                if abs(speeds.radius - new_radius) > 0.0:
+                    change_radius(speeds, new_radius)
+                    speeds.compute_other_speed()
+            limit_speed(speeds, scan)
 
 
 class MotionLimiter(object):

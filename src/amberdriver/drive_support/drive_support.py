@@ -5,6 +5,7 @@ import sys
 
 import os
 from amberclient.common.listener import Listener
+
 from ambercommon.common import runtime
 
 from amberdriver.drive_support import drive_support_logic
@@ -107,6 +108,7 @@ class DriveSupport(object):
             user_speeds = self.__user_speeds
             if user_speeds is not None and (last_speed is None or user_speeds.timestamp > last_speed.timestamp):
                 sys.stderr.write('before: %s\n' % str(user_speeds))
+                ts0 = time.time()
                 self.__distance_limiter(user_speeds)
                 self.__motion_limiter(user_speeds)
 
@@ -115,6 +117,7 @@ class DriveSupport(object):
                                                   user_speeds.speed_rear_left, user_speeds.speed_rear_right)
                 ts2 = time.time()
                 last_speed = user_speeds
-                sys.stderr.write('after(%fms): %s\n' % ((ts2 - ts1) * 1000.0, str(user_speeds)))
+                sys.stderr.write(
+                    'after(%fms, %fms): %s\n' % ((ts1 - ts0) * 1000.0, (ts2 - ts1) * 1000.0, str(user_speeds)))
 
             time.sleep(0.07)

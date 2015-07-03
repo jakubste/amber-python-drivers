@@ -3,8 +3,8 @@ import time
 
 import os
 
+from amberdriver.tools import logic
 from amberdriver.tools import config
-from amberdriver.tools.logic import Value, convert_grid_to_polar, convert_polar_to_grid
 
 __author__ = 'paoolo'
 
@@ -17,17 +17,17 @@ ROBO_WIDTH = float(config.ROBO_WIDTH)
 
 
 def convert_speed_grid_to_polar(velocity_x, velocity_y):
-    return convert_grid_to_polar(velocity_x, velocity_y)
+    return logic.convert_grid_to_polar(velocity_x, velocity_y)
 
 
 def convert_speed_polar_to_grid(velocity, angle):
-    return convert_polar_to_grid(velocity, angle)
+    return logic.convert_polar_to_grid(velocity, angle)
 
 
 def convert_map_grid_to_polar(map_grid):
     map_polar = []
     for x, y in map_grid:
-        angle, distance = convert_grid_to_polar(x, y)
+        angle, distance = logic.convert_grid_to_polar(x, y)
         map_polar.append((angle, distance))
     return map_polar
 
@@ -35,7 +35,7 @@ def convert_map_grid_to_polar(map_grid):
 def convert_map_polar_to_grid(map_polar):
     map_grid = []
     for angle, distance in map_polar:
-        x, y = convert_polar_to_grid(distance, angle)
+        x, y = logic.convert_polar_to_grid(distance, angle)
         map_grid.append((x, y))
     return map_grid
 
@@ -83,6 +83,8 @@ class Locator(object):
     def update_absolute_location(self, location):
         self.__last_update_ts = time.time()
         x, y, probability, angle, _ = location
+        if x is None or y is None or probability is None or angle is None:
+            return
         angle = normalize_angle(angle)
         self.__absolute_x, self.__absolute_y, self.__absolute_angle = x, y, angle
         self.__absolute_probability = probability
@@ -132,55 +134,86 @@ class Mapper(object):
     def __init__(self):
         self.data_grid = {}
 
-    def add_polar(self, polar, location):
+    def update_scan(self, scan, location):
         current_timestamp = time.time()
-        for angle, distance in polar:
+        for angle, distance in scan.points:
             angle = angle + location.angle
-            x, y = convert_polar_to_grid(distance, angle)
+            x, y = logic.convert_polar_to_grid(distance, angle)
+
             x, y = x + location.x, y + location.y
-            x, y = round(x), round(y)
+            x, y = logic.dround(x), logic.dround(y)
+
             if x not in self.data_grid:
                 self.data_grid[x] = {}
-            self.data_grid[x][y] = current_timestamp
+            if y not in self.data_grid:
+                self.data_grid[x][y] = logic.Object()
 
-    def flush(self, offset=0.5):
-        current_timestamp = time.time()
-        to_remove = []
-        for x in self.data_grid:
-            for y in self.data_grid[x]:
-                if self.data_grid[x][y] < current_timestamp - offset:
-                    to_remove.append((x, y))
-        for x, y in to_remove:
-            del self.data_grid[x][y]
-
-
-class ObstacleMapper(object):
-    def __init__(self):
-        self.__scan, self.__location = None, None
-        self.__data_grid = {}
-
-    def update_scan(self, scan):
-        self.__scan = scan
-        self.__update_map()
+            self.data_grid[x][y].scan_update_ts = current_timestamp
 
     def update_location(self, location):
-        self.__location = location
-        self.__update_map()
+        current_timestamp = time.time()
 
-    def __update_map(self):
-        scan = self.__scan
-        location = self.__location
-        if scan is not None and location is not None:
-            scan.points = sorted(scan.points, key=lambda (a, _): a)
-            # transform scan
+        x = logic.dround(location.x)
+        y = logic.dround(location.y)
+
+        self.__update_location(x, y, current_timestamp)
+
+    def __update_location(self, x, y, current_timestamp, steps=None):
+        if steps is not None and steps == 0:
+            return
+
+        if x not in self.data_grid:
+            self.data_grid[x] = {}
+
+        if y not in self.data_grid[x]:
+            self.data_grid[x][y] = logic.Object()
+
+        self.data_grid[x][y].location_update_ts = current_timestamp
+        if hasattr(self.data_grid[x][y], 'location_update_weight'):
+            self.data_grid[x][y].location_update_weight += 1
+            if steps is None:
+                steps = self.data_grid[x][y].location_update_weight
+            self.__update_location(x + 0.25, y, current_timestamp, steps - 1)
+            self.__update_location(x - 0.25, y, current_timestamp, steps - 1)
+            self.__update_location(x, y + 0.25, current_timestamp, steps - 1)
+            self.__update_location(x, y - 0.25, current_timestamp, steps - 1)
+
+        else:
+            self.data_grid[x][y].location_update_weight = 1
+
+    def get_scan(self, location):
+        scan = logic.Object()
+        scan.points = []
+
+        angle_start = location.angle - 2.0943951023931953
+        angle_stop = location.angle + 2.0943951023931953
+        angle_step = 0.35208516886930985
+
+        for angle in logic.drange(angle_start, angle_stop, angle_step):
+            added = False
+            for distance in logic.drange(0, 3000, 10):
+                x = logic.dround(distance * math.cos(angle) + location.x)
+                y = logic.dround(distance * math.sin(angle) + location.y)
+
+                if x in self.data_grid and y in self.data_grid[x]:
+                    scan.points.append((angle, distance))
+                    added = True
+                    break
+            if not added:
+                scan.points.append((angle, 0))
+
+        return scan
+
+    def flush(self, offset=0.5):
+        pass
 
 
 """ Objects class """
 
 
-class Location(Value):
+class Location(logic.Value):
     def __init__(self, x, y, angle, timestamp):
-        Value.__init__(self, timestamp)
+        logic.Value.__init__(self, timestamp)
         self.x, self.y, self.angle = x, y, angle
 
     def __str__(self):

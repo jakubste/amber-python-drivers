@@ -1,7 +1,6 @@
 import math
 import time
 
-
 __author__ = 'paoolo'
 
 """ Other """
@@ -132,3 +131,7 @@ class LowPassFilter(object):
         self.__values = map(lambda val: dround(val, 0.01), self.__values)
         self.__values = map(lambda (new, curr): curr if abs(new - curr) <= 0.01 else new, zip(self.__values, args))
         return self.__values[0] if len(self.__values) == 1 else self.__values
+
+
+class Object(object):
+    pass

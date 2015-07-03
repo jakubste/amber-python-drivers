@@ -6,9 +6,12 @@ import math
 
 import traceback
 import os
+
 from ambercommon.common import runtime
+
 from amberclient.common.listener import Listener
 
+from amberdriver.drive_support import drive_support_logic
 from amberdriver.drive_to_point import drive_to_point_logic
 from amberdriver.tools import logic, config
 from amberdriver.tools.logic import sign
@@ -227,19 +230,27 @@ class DriveToPoint(object):
         alpha = 0.17453292519943295 + factor * 0.3490658503988659
         beta = 1.0471975511965976 + factor * 0.5235987755982988
 
-        if abs(drive_angle) < alpha:  # 10st
+        scan = self.__scan
+        best_distance = drive_support_logic.get_distance(scan, drive_angle)
+        best_angle = drive_angle
+        for angle, distance in sorted(scan.points, key=lambda (a, _): abs(a - drive_angle)):
+            if distance > best_distance and angle * drive_angle >= 0.0:
+                best_distance = distance
+                best_angle = angle
+
+        if abs(best_angle) < alpha:  # 10st
             # drive normal
             left, right = MAX_SPEED, MAX_SPEED
-        elif abs(drive_angle) > beta:  # 60st
+        elif abs(best_angle) > beta:  # 60st
             # rotate in place
             left = -MAX_SPEED
             right = MAX_SPEED
-            if drive_angle < 0:
+            if best_angle < 0:
                 left, right = right, left
         else:
             # drive on turn
-            left = MAX_SPEED - DriveToPoint.compute_change(drive_angle, math.pi / beta)
-            right = MAX_SPEED + DriveToPoint.compute_change(drive_angle, math.pi / beta)
+            left = MAX_SPEED - DriveToPoint.compute_change(best_angle, math.pi / beta)
+            right = MAX_SPEED + DriveToPoint.compute_change(best_angle, math.pi / beta)
 
         _left, _right = self.__speeds_filter(abs(left), abs(right))
         left, right = sign(left) * _left, sign(right) * _right

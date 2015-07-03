@@ -6,9 +6,7 @@ import math
 
 import traceback
 import os
-
 from ambercommon.common import runtime
-
 from amberclient.common.listener import Listener
 
 from amberdriver.drive_support import drive_support_logic
@@ -43,6 +41,8 @@ class DriveToPoint(object):
         self.__location_proxy = location_proxy
         self.__hokuyo_proxy = hokuyo_proxy
 
+        self.__scan_analyzer = logic.ScanAnalyzer()
+
         self.__hokuyo_listener = ScanHandler(self)
         hokuyo_proxy.subscribe(self.__hokuyo_listener)
         self.__scan = None
@@ -62,7 +62,7 @@ class DriveToPoint(object):
         runtime.add_shutdown_hook(self.stop)
 
     def set_scan(self, scan):
-        self.__scan = scan
+        self.__scan = self.__scan_analyzer(scan)
 
     def stop(self):
         self.__is_active = False
@@ -233,10 +233,11 @@ class DriveToPoint(object):
         scan = self.__scan
         best_distance = drive_support_logic.get_distance(scan, drive_angle)
         best_angle = drive_angle
-        for angle, distance in sorted(scan.points, key=lambda (a, _): abs(a - drive_angle)):
-            if distance > best_distance and angle * drive_angle >= 0.0:
-                best_distance = distance
-                best_angle = angle
+        if best_distance < 350.0:
+            for angle, distance in sorted(scan.points, key=lambda (a, _): abs(a - drive_angle)):
+                if distance > best_distance and angle * drive_angle >= 0.0:
+                    best_distance = distance
+                    best_angle = angle
 
         if abs(best_angle) < alpha:  # 10st
             # drive normal

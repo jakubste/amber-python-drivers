@@ -45,8 +45,9 @@ def compute_new_radius(speeds, scan):
     if radius is not None and abs(radius) > 0.0:
         for angle, distance in sorted(scan.points, key=lambda (a, d): a, reverse=(radius < 0.0)):
             if 100.0 < distance < 5600.0:
-                if (radius < 0.0 and -45.0 < angle < 0.0) or (radius > 0.0 and 45.0 > angle > 0.0):
-                    _distance = 2.0 * radius * math.sin(math.radians(abs(angle)))
+                if (radius < 0.0 and -0.7853981633974483 < angle < 0.0) or \
+                        (radius > 0.0 and 0.7853981633974483 > angle > 0.0):
+                    _distance = 2.0 * radius * math.sin(abs(angle))
                     if _distance > distance:
                         _radius = 0.8 * radius * _distance / distance
                         if _radius < radius:
@@ -307,12 +308,12 @@ def find_minimas_maximas_inters(scan):
 
 
 def get_min_distance(speeds, scan):
-    center_angle = math.degrees(get_angle(speeds.speed_left, speeds.speed_right, ROBO_WIDTH))
-    min_distance_angle = center_angle - 30.0
+    center_angle = get_angle(speeds.speed_left, speeds.speed_right, ROBO_WIDTH)
+    min_distance_angle = center_angle - 0.5235987755982988  # 30st
     min_distance = None
 
     for angle, distance in sorted(scan.points, key=lambda (a, _): a):
-        if min_distance_angle < angle < center_angle + 30.0:
+        if min_distance_angle < angle < center_angle + 0.5235987755982988:  # 30st
             if 60.0 < distance < 5000.0 and (min_distance is None or min_distance > distance):
                 min_distance = distance
                 min_distance_angle = angle
@@ -322,27 +323,27 @@ def get_min_distance(speeds, scan):
 
 def get_distance(scan, angle):
     for _angle, distance in scan.points:
-        if abs(_angle - angle) < 0.353:
+        if abs(_angle - angle) < 0.006161012259539983:
             return distance
     return 0.0
 
 
 def avoid(speeds, scan):
     min_distance_angle, min_distance = get_min_distance(speeds, scan)
-    center_angle = math.degrees(get_angle(speeds.speed_left, speeds.speed_right, ROBO_WIDTH))
+    center_angle = get_angle(speeds.speed_left, speeds.speed_right, ROBO_WIDTH)
     if min_distance < HARD_DISTANCE_LIMIT + 2.0 * ROBO_WIDTH:
         best_distance = get_distance(scan, center_angle)
         best_angle = center_angle
         best_diff_angle = abs(center_angle - min_distance_angle)
         for angle, distance in sorted(scan.points, key=lambda (a, _): abs(a - center_angle)):
-            if center_angle - 30.0 < angle < center_angle + 30.0:
+            if center_angle - 0.5235987755982988 < angle < center_angle + 0.5235987755982988:
                 diff_angle = abs(min_distance_angle - angle)
                 if distance > best_distance and diff_angle > best_diff_angle:
                     best_distance = distance
                     best_angle = angle
                     best_diff_angle = diff_angle
         if speeds.speed_left * speeds.speed_right > 0.0:
-            change_angle(speeds, math.radians(best_angle))
+            change_angle(speeds, best_angle)
             speeds.compute_other_speed()
     elif min_distance < HARD_DISTANCE_LIMIT + ROBO_WIDTH:
         if min_distance_angle > 0.0:
@@ -355,7 +356,7 @@ def avoid(speeds, scan):
 
 def limit_speed(speeds, scan):
     min_distance_angle, min_distance = get_min_distance(speeds, scan)
-    if min_distance is not None:
+    if min_distance is not None and abs(speeds.linear_speed) > 25.0:
         if min_distance < HARD_DISTANCE_LIMIT:
             if speeds.linear_speed > 0.0:
                 speeds.speed_front_left = 0.0

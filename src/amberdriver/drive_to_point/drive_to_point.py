@@ -7,12 +7,12 @@ import math
 import traceback
 import os
 from ambercommon.common import runtime
+
 from amberclient.common.listener import Listener
 
 from amberdriver.drive_support import drive_support_logic
 from amberdriver.drive_to_point import drive_to_point_logic
 from amberdriver.tools import logic, config
-from amberdriver.tools.logic import sign
 
 __author__ = 'paoolo'
 
@@ -27,10 +27,10 @@ MAX_SPEED = float(config.DRIVE_TO_POINT_MAX_SPEED)
 
 class ScanHandler(Listener):
     def __init__(self, driver):
-        self.__drive_support = driver
+        self.__drive_to_point = driver
 
     def handle(self, response):
-        self.__drive_support.set_scan(response)
+        self.__drive_to_point.set_scan(response)
 
 
 class DriveToPoint(object):
@@ -254,7 +254,7 @@ class DriveToPoint(object):
             right = MAX_SPEED + DriveToPoint.compute_change(best_angle, math.pi / beta)
 
         _left, _right = self.__speeds_filter(abs(left), abs(right))
-        left, right = sign(left) * _left, sign(right) * _right
+        left, right = logic.sign(left) * _left, logic.sign(right) * _right
 
         return left, right
 

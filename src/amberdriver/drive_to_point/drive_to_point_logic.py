@@ -3,8 +3,7 @@ import time
 
 import os
 
-from amberdriver.tools import logic
-from amberdriver.tools import config
+from amberdriver.tools import config, logic
 
 __author__ = 'paoolo'
 

@@ -3,8 +3,7 @@ import collections
 
 import os
 
-from amberdriver.tools import config
-from amberdriver.tools.logic import Value, LowPassFilter, sign, average
+from amberdriver.tools import config, logic
 
 __author__ = 'paoolo'
 
@@ -81,9 +80,9 @@ def compute_acceleration(list_of_speeds):
     return 0.0
 
 
-class Speeds(Value):
+class Speeds(logic.Value):
     def __init__(self, speeds, last_speeds=None):
-        Value.__init__(self)
+        logic.Value.__init__(self)
         front_left, front_right, rear_left, rear_right = speeds
 
         self.speed_front_left, self.speed_front_right = front_left, front_right
@@ -96,13 +95,13 @@ class Speeds(Value):
         self.compute_other_speed(last_speeds)
 
     def compute_other_speed(self, last_speeds=None):
-        self.speed_left = average(self.speed_front_left, self.speed_rear_left)
-        self.speed_right = average(self.speed_front_right, self.speed_rear_right)
-        self.speed_front = average(self.speed_front_left, self.speed_front_right)
-        self.speed_rear = average(self.speed_rear_left, self.speed_rear_right)
+        self.speed_left = logic.average(self.speed_front_left, self.speed_rear_left)
+        self.speed_right = logic.average(self.speed_front_right, self.speed_rear_right)
+        self.speed_front = logic.average(self.speed_front_left, self.speed_front_right)
+        self.speed_rear = logic.average(self.speed_rear_left, self.speed_rear_right)
 
-        self.linear_speed = average(self.speed_left, self.speed_right,
-                                    self.speed_front, self.speed_rear)
+        self.linear_speed = logic.average(self.speed_left, self.speed_right,
+                                          self.speed_front, self.speed_rear)
 
         self.radius = compute_radius(self.speed_left, self.speed_right)
 
@@ -128,9 +127,9 @@ class Speeds(Value):
                 self.speed_rear_left, self.speed_rear_right)
 
 
-class Motion(Value):
+class Motion(logic.Value):
     def __init__(self, acceleration_forward, acceleration_side, rotational_speed):
-        Value.__init__(self)
+        logic.Value.__init__(self)
         self.acceleration_forward = acceleration_forward
         self.acceleration_side = acceleration_side
         self.rotational_speed = rotational_speed
@@ -144,7 +143,7 @@ class Motion(Value):
 
 class SpeedsAnalyzer(object):
     def __init__(self):
-        self.__speeds_filter = LowPassFilter(0.9, 0.0, 0.0, 0.0, 0.0)
+        self.__speeds_filter = logic.LowPassFilter(0.9, 0.0, 0.0, 0.0, 0.0)
         self.__last_speeds = collections.deque(maxlen=20)
 
     def __call__(self, speeds):
@@ -157,9 +156,9 @@ class MotionAnalyzer(object):
         self.__gravity_alpha = 0.8
         self.__gravity_forward, self.__gravity_side = 0.0, 0.0
 
-        self.__acceleration_forward_filter = LowPassFilter(0.3, 0.0)
-        self.__acceleration_side_filter = LowPassFilter(0.3, 0.0)
-        self.__rotational_speed_filter = LowPassFilter(0.7, 0.0)
+        self.__acceleration_forward_filter = logic.LowPassFilter(0.3, 0.0)
+        self.__acceleration_side_filter = logic.LowPassFilter(0.3, 0.0)
+        self.__rotational_speed_filter = logic.LowPassFilter(0.7, 0.0)
 
     @staticmethod
     def get_motion_data(motion):
@@ -328,18 +327,18 @@ def change_radius(speeds, radius):
                 speed_left = speeds.speed_right * (2.0 * radius - ROBO_WIDTH) / (2.0 * radius + ROBO_WIDTH)
                 if abs(speeds.speed_left) > 0.0:
                     factor_for_left = abs(speed_left / speeds.speed_left)
-                    speeds.speed_front_left = sign(speeds.speed_front_left) * factor_for_left * \
+                    speeds.speed_front_left = logic.sign(speeds.speed_front_left) * factor_for_left * \
                                               abs(speeds.speed_front_left)
-                    speeds.speed_rear_left = sign(speeds.speed_rear_left) * factor_for_left * \
+                    speeds.speed_rear_left = logic.sign(speeds.speed_rear_left) * factor_for_left * \
                                              abs(speeds.speed_rear_left)
             else:
                 # turn right
                 speed_right = speeds.speed_left * (2.0 * radius - ROBO_WIDTH) / (2.0 * radius + ROBO_WIDTH)
                 if abs(speeds.speed_right) > 0.0:
                     factor_for_right = abs(speed_right / speeds.speed_right)
-                    speeds.speed_front_right = sign(speeds.speed_front_right) * factor_for_right * \
+                    speeds.speed_front_right = logic.sign(speeds.speed_front_right) * factor_for_right * \
                                                abs(speeds.speed_front_right)
-                    speeds.speed_rear_right = sign(speeds.speed_rear_right) * factor_for_right * \
+                    speeds.speed_rear_right = logic.sign(speeds.speed_rear_right) * factor_for_right * \
                                               abs(speeds.speed_rear_right)
     else:
         # rotate in place

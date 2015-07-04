@@ -16,14 +16,6 @@ ROBO_WIDTH = float(config.ROBO_WIDTH)
 """ Data polar/grid functions, conversion, etc. """
 
 
-def convert_speed_grid_to_polar(velocity_x, velocity_y):
-    return logic.convert_grid_to_polar(velocity_x, velocity_y)
-
-
-def convert_speed_polar_to_grid(velocity, angle):
-    return logic.convert_polar_to_grid(velocity, angle)
-
-
 def convert_map_grid_to_polar(map_grid):
     map_polar = []
     for x, y in map_grid:

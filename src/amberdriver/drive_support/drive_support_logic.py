@@ -5,7 +5,6 @@ import os
 
 from amberdriver.tools import config
 from amberdriver.tools.logic import Value, LowPassFilter, sign, average
-from amberdriver.tools import logic
 
 __author__ = 'paoolo'
 
@@ -53,34 +52,6 @@ def compute_new_radius(speeds, scan):
                         if _radius < radius:
                             radius = _radius
     return radius
-
-
-def compute_circle(radius, stop_angle):
-    if radius < 0.0:
-        start_angle = 0.0
-        stop_angle = stop_angle
-        step = 0.017453292519943295
-    else:
-        start_angle = math.pi
-        stop_angle = math.pi - stop_angle
-        step = -0.017453292519943295
-
-    circle = []
-    for angle in logic.drange(start_angle, stop_angle, step):
-        point = logic.convert_polar_to_grid(abs(radius), angle)
-        circle.append(point)
-    circle = map(lambda (x, y): (x + radius, y), circle)
-    circle = map(lambda (x, y): logic.convert_grid_to_polar(x, y), circle)
-
-    return circle
-
-
-def compute_robot_trajectory(speeds):
-    if speeds.radius is not None and abs(speeds.radius) > 0.0:
-        robot_trajectory = compute_circle(speeds.radius, speeds.linear_speed / abs(speeds.radius) * 10.0)
-        robot_trajectory = map(lambda (a, d): (-(a - math.pi / 2.0), d), robot_trajectory)
-        return robot_trajectory
-    return []
 
 
 def compute_radius(left, right):
@@ -283,30 +254,6 @@ def apply_factor(speeds, factor):
         speeds.speed_rear_right *= factor
 
 
-def find_minimas_maximas_inters(scan):
-    minimas, maximas, inters = [], [], []
-    scan.points = sorted(scan.points, key=lambda (a, _): a)
-    scan_iterator = iter(scan.points)
-    try:
-        (prev_angle, prev_distance) = scan_iterator.next()
-        prev_diff = 0.0
-        while True:
-            (angle, distance) = scan_iterator.next()
-            diff = distance - prev_distance
-            if abs(diff - prev_diff) > 10.0:
-                inters.append(average(prev_angle, angle))
-            else:
-                if prev_diff < 0.0 < diff:
-                    maximas.append((prev_angle, prev_distance))
-                elif prev_diff > 0.0 > diff:
-                    minimas.append((prev_angle, prev_distance))
-            prev_diff = diff
-            (prev_angle, prev_distance) = (angle, distance)
-    except StopIteration:
-        pass
-    return minimas, maximas, inters
-
-
 def get_min_distance(speeds, scan):
     center_angle = get_angle(speeds.speed_left, speeds.speed_right, ROBO_WIDTH)
     min_distance_angle = center_angle - 0.5235987755982988  # 30st
@@ -368,40 +315,6 @@ def limit_speed(speeds, scan):
                 max_speed = compute_max_speed(MAX_SPEED, min_distance, SOFT_DISTANCE_LIMIT, HARD_DISTANCE_LIMIT)
                 reduce_speed(speeds, max_speed)
                 speeds.compute_other_speed()
-
-
-def limit_speed_rotational(speeds, scan, robot_trajectory):
-    radius_limited_by_scan = speeds.radius
-
-    robot_trajectory = sorted(robot_trajectory, key=lambda (a, _): a, reverse=(speeds.radius > 0.0))
-
-    scan_iterator = iter(scan.points)
-    robot_trajectory_iterator = iter(robot_trajectory)
-
-    try:
-        (scan_angle, prev_scan_distance) = scan_iterator.next()
-        (robot_trajectory_angle, robot_trajectory_distance) = robot_trajectory_iterator.next()
-        scan_distance = prev_scan_distance
-        while True:
-            if abs(robot_trajectory_angle) < abs(scan_angle):
-                (scan_angle, new_scan_distance) = scan_iterator.next()
-                scan_distance = average(prev_scan_distance, new_scan_distance)
-                prev_scan_distance = new_scan_distance
-
-            else:
-                value = math.sin(robot_trajectory_angle)
-                if scan_distance < robot_trajectory_distance * 0.8 and abs(value) > 0.0:
-                    radius = (robot_trajectory_distance * 0.8) / (2 * value)
-                    if radius_limited_by_scan > radius:
-                        radius_limited_by_scan = radius
-                (robot_trajectory_angle, robot_trajectory_distance) = robot_trajectory_iterator.next()
-
-    except StopIteration:
-        pass
-
-    if abs(radius_limited_by_scan - speeds.radius) > 25.0:
-        change_radius(speeds, radius_limited_by_scan)
-        speeds.compute_other_speed()
 
 
 def change_radius(speeds, radius):

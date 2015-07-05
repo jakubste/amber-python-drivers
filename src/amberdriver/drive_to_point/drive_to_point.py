@@ -6,6 +6,7 @@ import math
 
 import traceback
 import os
+
 from ambercommon.common import runtime
 
 from amberclient.common.listener import Listener
@@ -23,6 +24,8 @@ config.add_config_ini('%s/drive_to_point.ini' % pwd)
 LOGGER_NAME = 'DriveToPoint'
 
 MAX_SPEED = float(config.DRIVE_TO_POINT_MAX_SPEED)
+ROBO_WIDTH = float(config.ROBO_WIDTH)
+MAXIMUM_TIME_DRIVE_TO = float(config.MAXIMUM_TIME_DRIVE_TO)
 
 
 class ScanHandler(Listener):
@@ -155,31 +158,46 @@ class DriveToPoint(object):
     def __drive_to(self, target, next_targets_timestamp):
         self.__logger.info('Drive to %s', str(target))
 
+        coming_out_from_local_minimum = False
+        temporary_target = None
         location = self.__locator.get_location()
-        while not DriveToPoint.target_reached(location, target) and self.__driving_allowed and self.__is_active \
-                and not self.__next_targets_timestamp > next_targets_timestamp:
-            left, right = self.compute_speed(location, target)
 
-            """
-            TODO(paoolo): do nice stuff with avoiding obstacles
-            * map scan histogram to cartesian grid
-            * update temporary map (remove old/low priority)
-            * update location (position/angle)
-            * detect obstacles from scan histogram
-            * determine position of destination
-            * determine distance to destination
-            * analyze temporary map to find path to destination
-            * analyze probability of local minimum
-            * drive to (temporary) destination
-            """
+        start_time = time.time()
+        while not DriveToPoint.target_reached(location, target) and \
+                self.__driving_allowed and self.__is_active and \
+                not self.__next_targets_timestamp > next_targets_timestamp and \
+                                start_time + MAXIMUM_TIME_DRIVE_TO < time.time():
+            if coming_out_from_local_minimum:
+                if temporary_target is not None and not DriveToPoint.target_reached(location, temporary_target):
+                    drive_angle, drive_distance = DriveToPoint.__compute_drive_angle_distance(location,
+                                                                                              temporary_target)
+                    if drive_angle is not None and drive_distance is not None:
+                        self.__send_commands(drive_angle, drive_distance)
+                else:
+                    coming_out_from_local_minimum = False
+                    temporary_target = None
+                    self.__stop()
+            else:
+                drive_angle, drive_distance = DriveToPoint.__compute_drive_angle_distance(location, target)
 
-            left, right = int(left), int(right)
-            self.__driver_proxy.send_motors_command(left, right, left, right)
+                if drive_angle is not None and drive_distance is not None:
+                    scan = self.__scan
+                    scan_distance = drive_support_logic.get_distance(scan, drive_angle)
+
+                    if drive_distance > scan_distance:
+                        coming_out_from_local_minimum = True
+                        temporary_target = DriveToPoint.__find_temporary_target(scan, scan_distance, drive_angle)
+                        self.__stop()
+                    else:
+                        self.__send_commands(drive_angle, drive_distance)
 
             time.sleep(0.07)
             location = self.__locator.get_location()
 
-        self.__logger.info('Target %s reached', str(target))
+        if start_time + MAXIMUM_TIME_DRIVE_TO > time.time():
+            self.__logger.warn('Target %s not reachable', str(target))
+        else:
+            self.__logger.info('Target %s reached', str(target))
 
     def __add_target_to_visited(self, target):
         self.__targets_lock.acquire()
@@ -207,16 +225,26 @@ class DriveToPoint(object):
             traceback.print_exc()
             return False
 
-    def compute_speed(self, location, target):
+    @staticmethod
+    def __find_temporary_target(scan, scan_distance, drive_angle):
+        best_distance = scan_distance
+        best_angle = drive_angle
+        for angle, distance in sorted(scan.points, key=lambda (a, _): abs(a - drive_angle)):
+            if distance > best_distance:
+                best_distance = distance
+                best_angle = angle
+        x, y = logic.convert_polar_to_grid(best_distance - ROBO_WIDTH, best_angle)
+        return x, y, ROBO_WIDTH * 0.7
+
+    @staticmethod
+    def __compute_drive_angle_distance(location, target):
         target_x, target_y, _ = target
 
-        location_x, location_y, location_angle, = location.x, location.y, location.angle
+        location_x, location_y, location_angle = location.x, location.y, location.angle
+        location_angle = drive_to_point_logic.normalize_angle(location_angle)
 
         if location_x is None or location_y is None or location_angle is None:
-            # sth wrong, stop!
-            return 0.0, 0.0
-
-        location_angle = drive_to_point_logic.normalize_angle(location_angle)
+            return None, None
 
         diff_y = target_y - location_y
         diff_x = target_x - location_x
@@ -226,32 +254,26 @@ class DriveToPoint(object):
         drive_angle = -drive_angle  # mirrored map
         drive_distance = math.sqrt(diff_y * diff_y + diff_x * diff_x) * 1000.0
 
+        return drive_angle, drive_distance
+
+    def __compute_speed(self, drive_angle, drive_distance):
         factor = -math.pow(0.997, drive_distance) + 1.0
         alpha = 0.17453292519943295 + factor * 0.3490658503988659
         beta = 1.0471975511965976 + factor * 0.5235987755982988
 
-        scan = self.__scan
-        best_distance = drive_support_logic.get_distance(scan, drive_angle)
-        best_angle = drive_angle
-        if best_distance < 350.0:
-            for angle, distance in sorted(scan.points, key=lambda (a, _): abs(a - drive_angle)):
-                if distance > best_distance and angle * drive_angle >= 0.0:
-                    best_distance = distance
-                    best_angle = angle
-
-        if abs(best_angle) < alpha:  # 10st
+        if abs(drive_angle) < alpha:  # 10st
             # drive normal
             left, right = MAX_SPEED, MAX_SPEED
-        elif abs(best_angle) > beta:  # 60st
+        elif abs(drive_angle) > beta:  # 60st
             # rotate in place
             left = -MAX_SPEED
             right = MAX_SPEED
-            if best_angle < 0:
+            if drive_angle < 0:
                 left, right = right, left
         else:
             # drive on turn
-            left = MAX_SPEED - DriveToPoint.compute_change(best_angle, math.pi / beta)
-            right = MAX_SPEED + DriveToPoint.compute_change(best_angle, math.pi / beta)
+            left = MAX_SPEED - DriveToPoint.compute_change(drive_angle, math.pi / beta)
+            right = MAX_SPEED + DriveToPoint.compute_change(drive_angle, math.pi / beta)
 
         _left, _right = self.__speeds_filter(abs(left), abs(right))
         left, right = logic.sign(left) * _left, logic.sign(right) * _right
@@ -261,3 +283,8 @@ class DriveToPoint(object):
     @staticmethod
     def compute_change(drive_angle, driving_alpha):
         return driving_alpha * drive_angle / math.pi * MAX_SPEED
+
+    def __send_commands(self, drive_angle, drive_distance):
+        left, right = self.__compute_speed(drive_angle, drive_distance)
+        left, right = int(left), int(right)
+        self.__driver_proxy.send_motors_command(left, right, left, right)

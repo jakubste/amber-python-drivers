@@ -6,9 +6,7 @@ import math
 
 import traceback
 import os
-
 from ambercommon.common import runtime
-
 from amberclient.common.listener import Listener
 
 from amberdriver.drive_support import drive_support_logic
@@ -286,5 +284,10 @@ class DriveToPoint(object):
 
     def __send_commands(self, drive_angle, drive_distance):
         left, right = self.__compute_speed(drive_angle, drive_distance)
+        current_timestamp = time.time()
+        scan_factor = logic.compute_data_trust(self.__scan.timestamp / 1000.0, current_timestamp)
+        location_factor = logic.compute_data_trust(self.__locator.get_last_update_timestamp(), current_timestamp)
+        left = left * scan_factor * location_factor
+        right = right * scan_factor * location_factor
         left, right = int(left), int(right)
         self.__driver_proxy.send_motors_command(left, right, left, right)

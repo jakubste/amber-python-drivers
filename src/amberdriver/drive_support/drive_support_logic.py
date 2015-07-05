@@ -1,5 +1,6 @@
 import math
 import collections
+import time
 
 import os
 
@@ -213,8 +214,6 @@ class DistanceLimiter(object):
         self.__distance_factor = compute_factor_due_to_distance(scan)
 
     def __call__(self, speeds):
-        apply_factor(speeds, self.__distance_factor)
-
         scan = self.__scan
         if scan is not None:
             avoid(speeds, scan)
@@ -225,6 +224,9 @@ class DistanceLimiter(object):
                     change_radius(speeds, new_radius)
                     speeds.compute_other_speed()
             limit_speed(speeds, scan)
+            current_timestamp = time.time()
+            apply_factor(speeds, logic.compute_data_trust(scan.timestamp / 1000.0, current_timestamp))
+        apply_factor(speeds, self.__distance_factor)
 
 
 class MotionLimiter(object):
@@ -237,12 +239,12 @@ class MotionLimiter(object):
         self.__acceleration_factor, self.__rotational_factor = compute_factor_due_to_motion(motion)
 
     def __call__(self, speeds):
-        apply_factor(speeds, self.__acceleration_factor)
-        apply_factor(speeds, self.__rotational_factor)
-
         motion = self.__motion
         if motion is not None:
-            pass
+            current_timestamp = time.time()
+            apply_factor(speeds, logic.compute_data_trust(motion.timestamp / 1000.0, current_timestamp))
+        apply_factor(speeds, self.__acceleration_factor)
+        apply_factor(speeds, self.__rotational_factor)
 
 
 def apply_factor(speeds, factor):

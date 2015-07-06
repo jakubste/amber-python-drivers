@@ -116,6 +116,9 @@ class Locator(object):
             angle = (1.0 - probability) * self.__relative_angle + probability * self.__absolute_angle
             return Location(x, y, angle, self.__last_update_ts)
 
+    def get_absolute_location(self):
+        return Location(self.__absolute_x, self.__absolute_y, self.__absolute_angle, self.__last_update_ts)
+
     def get_last_update_timestamp(self):
         return self.__last_update_ts
 

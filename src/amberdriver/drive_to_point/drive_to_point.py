@@ -160,7 +160,7 @@ class DriveToPoint(object):
 
         coming_out_from_local_minimum = False
         temporary_target = None
-        location = self.__locator.get_location()
+        location = self.__locator.get_absolute_location()
 
         start_time = time.time()
         while not DriveToPoint.target_reached(location, target) and \
@@ -194,7 +194,7 @@ class DriveToPoint(object):
                         self.__send_commands(drive_angle, drive_distance)
 
             time.sleep(0.07)
-            location = self.__locator.get_location()
+            location = self.__locator.get_absolute_location()
 
         if start_time + MAXIMUM_TIME_DRIVE_TO < time.time():
             self.__logger.warn('Target %s not reachable', str(target))

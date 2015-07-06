@@ -6,9 +6,7 @@ import math
 
 import traceback
 import os
-
 from ambercommon.common import runtime
-
 from amberclient.common.listener import Listener
 
 from amberdriver.drive_support import drive_support_logic
@@ -222,15 +220,21 @@ class DriveToPoint(object):
     def __find_temporary_target(scan, scan_distance, drive_angle, location, current_target):
         best_current_temporary_distance = None
         best_temporary_x, best_temporary_y = 0.0, 0.0
-        for angle, distance in sorted(scan.points, key=lambda (a, _): abs(a - drive_angle)):
-            temporary_x, temporary_y = logic.convert_polar_to_grid(distance - ROBO_WIDTH, angle + location.angle)
+        best_distance = math.sqrt(math.pow(current_target[0] - location.x, 2.0) +
+                                  math.pow(current_target[1] - location.y, 2.0))
+        for angle, distance in sorted(scan.points, key=lambda (a, _): a):
+            temporary_x, temporary_y = logic.convert_polar_to_grid(distance - 1.5 * ROBO_WIDTH,
+                                                                   angle + location.angle)
             temporary_x, temporary_y = temporary_x / 1000.0 + location.x, temporary_y / 1000.0 + location.y
             current_temporary_distance = math.sqrt(math.pow(current_target[0] - temporary_x, 2.0) +
                                                    math.pow(current_target[1] - temporary_y, 2.0))
-            if best_current_temporary_distance is None or current_temporary_distance < best_current_temporary_distance:
+            if (best_current_temporary_distance is None or
+                        current_temporary_distance < best_current_temporary_distance) and \
+                            distance > best_distance:
                 best_temporary_x, best_temporary_y = temporary_x, temporary_y
                 best_current_temporary_distance = current_temporary_distance
-        return best_temporary_x, best_temporary_y, ROBO_WIDTH * 0.7 / 1000.0
+                best_distance = distance
+        return best_temporary_x, best_temporary_y, ROBO_WIDTH * 1.3 / 1000.0
 
     @staticmethod
     def __compute_drive_angle_distance(location, target):
@@ -253,9 +257,8 @@ class DriveToPoint(object):
         return drive_angle, drive_distance
 
     def __compute_speed(self, drive_angle, drive_distance):
-        factor = -math.pow(0.997, drive_distance) + 1.0
-        alpha = 0.17453292519943295 + factor * 0.3490658503988659
-        beta = 1.0471975511965976 + factor * 0.5235987755982988
+        alpha = 0.17453292519943295
+        beta = 0.5235987755982988
 
         if abs(drive_angle) < alpha:  # 10st
             # drive normal

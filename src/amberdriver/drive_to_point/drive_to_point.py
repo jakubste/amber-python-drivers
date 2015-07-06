@@ -158,8 +158,6 @@ class DriveToPoint(object):
     def __drive_to(self, target, next_targets_timestamp):
         self.__logger.info('Drive to %s', str(target))
 
-        coming_out_from_local_minimum = False
-        temporary_target = None
         location = self.__locator.get_absolute_location()
 
         start_time = time.time()
@@ -167,32 +165,24 @@ class DriveToPoint(object):
                 self.__driving_allowed and self.__is_active and \
                 not self.__next_targets_timestamp > next_targets_timestamp and \
                                 start_time + MAXIMUM_TIME_DRIVE_TO > time.time():
-            if coming_out_from_local_minimum:
-                if temporary_target is not None and not DriveToPoint.target_reached(location, temporary_target):
+            drive_angle, drive_distance = DriveToPoint.__compute_drive_angle_distance(location, target)
+
+            if drive_angle is not None and drive_distance is not None:
+                scan = self.__scan
+                scan_distance = drive_support_logic.get_distance(scan, drive_angle)
+
+                if drive_distance > scan_distance:
+                    temporary_target = DriveToPoint.__find_temporary_target(scan, scan_distance, drive_angle,
+                                                                            location, target)
+                    self.__logger.warn('Try to drive to temporary target: %s', str(temporary_target))
                     drive_angle, drive_distance = DriveToPoint.__compute_drive_angle_distance(location,
                                                                                               temporary_target)
                     if drive_angle is not None and drive_distance is not None:
+                        self.__logger.info('Drive angle: %f, distance: %f', drive_angle, drive_distance)
                         self.__send_commands(drive_angle, drive_distance)
                 else:
-                    coming_out_from_local_minimum = False
-                    temporary_target = None
-                    self.__logger.warn('Temporary target reached!')
-                    self.__stop()
-            else:
-                drive_angle, drive_distance = DriveToPoint.__compute_drive_angle_distance(location, target)
-
-                if drive_angle is not None and drive_distance is not None:
-                    scan = self.__scan
-                    scan_distance = drive_support_logic.get_distance(scan, drive_angle)
-
-                    if drive_distance > scan_distance:
-                        coming_out_from_local_minimum = True
-                        temporary_target = DriveToPoint.__find_temporary_target(scan, scan_distance, drive_angle,
-                                                                                location, target)
-                        self.__logger.warn('Setup temporary target: %s', str(temporary_target))
-                        self.__stop()
-                    else:
-                        self.__send_commands(drive_angle, drive_distance)
+                    self.__send_commands(drive_angle, drive_distance)
+                    self.__logger.info('Drive angle: %f, distance: %f', drive_angle, drive_distance)
 
             time.sleep(0.07)
             location = self.__locator.get_absolute_location()

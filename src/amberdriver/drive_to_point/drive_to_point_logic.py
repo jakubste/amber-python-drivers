@@ -15,44 +15,12 @@ ROBO_WIDTH = float(config.ROBO_WIDTH)
 """ Data polar/grid functions, conversion, etc. """
 
 
-def convert_map_grid_to_polar(map_grid):
-    map_polar = []
-    for x, y in map_grid:
-        angle, distance = logic.convert_grid_to_polar(x, y)
-        map_polar.append((angle, distance))
-    return map_polar
-
-
-def convert_map_polar_to_grid(map_polar):
-    map_grid = []
-    for angle, distance in map_polar:
-        x, y = logic.convert_polar_to_grid(distance, angle)
-        map_grid.append((x, y))
-    return map_grid
-
-
 def normalize_angle(angle):
     if angle < -math.pi:
         angle += 2 * math.pi
     elif angle > math.pi:
         angle -= 2 * math.pi
     return angle
-
-
-""" Data analyzer """
-
-
-class LocationAnalyzer(object):
-    def __init__(self):
-        pass
-
-    @staticmethod
-    def get_location_data(location):
-        x, y, probability, angle, _ = location.get_location()
-        return Location(x, y, angle, time.time())
-
-    def __call__(self, location):
-        location = self.get_location_data(location)
 
 
 """ Mechanism """
@@ -125,84 +93,6 @@ class Locator(object):
     def __call__(self, speeds):
         self.calculate_relative_location(speeds.speed_left, speeds.speed_right)
         return self.get_location()
-
-
-class Mapper(object):
-    def __init__(self):
-        self.data_grid = {}
-
-    def update_scan(self, scan, location):
-        current_timestamp = time.time()
-        for angle, distance in scan.points:
-            angle = angle + location.angle
-            x, y = logic.convert_polar_to_grid(distance, angle)
-
-            x, y = x + location.x, y + location.y
-            x, y = logic.dround(x), logic.dround(y)
-
-            if x not in self.data_grid:
-                self.data_grid[x] = {}
-            if y not in self.data_grid:
-                self.data_grid[x][y] = logic.Object()
-
-            self.data_grid[x][y].scan_update_ts = current_timestamp
-
-    def update_location(self, location):
-        current_timestamp = time.time()
-
-        x = logic.dround(location.x)
-        y = logic.dround(location.y)
-
-        self.__update_location(x, y, current_timestamp)
-
-    def __update_location(self, x, y, current_timestamp, steps=None):
-        if steps is not None and steps == 0:
-            return
-
-        if x not in self.data_grid:
-            self.data_grid[x] = {}
-
-        if y not in self.data_grid[x]:
-            self.data_grid[x][y] = logic.Object()
-
-        self.data_grid[x][y].location_update_ts = current_timestamp
-        if hasattr(self.data_grid[x][y], 'location_update_weight'):
-            self.data_grid[x][y].location_update_weight += 1
-            if steps is None:
-                steps = self.data_grid[x][y].location_update_weight
-            self.__update_location(x + 0.25, y, current_timestamp, steps - 1)
-            self.__update_location(x - 0.25, y, current_timestamp, steps - 1)
-            self.__update_location(x, y + 0.25, current_timestamp, steps - 1)
-            self.__update_location(x, y - 0.25, current_timestamp, steps - 1)
-
-        else:
-            self.data_grid[x][y].location_update_weight = 1
-
-    def get_scan(self, location):
-        scan = logic.Object()
-        scan.points = []
-
-        angle_start = location.angle - 2.0943951023931953
-        angle_stop = location.angle + 2.0943951023931953
-        angle_step = 0.35208516886930985
-
-        for angle in logic.drange(angle_start, angle_stop, angle_step):
-            added = False
-            for distance in logic.drange(0, 3000, 10):
-                x = logic.dround(distance * math.cos(angle) + location.x)
-                y = logic.dround(distance * math.sin(angle) + location.y)
-
-                if x in self.data_grid and y in self.data_grid[x]:
-                    scan.points.append((angle, distance))
-                    added = True
-                    break
-            if not added:
-                scan.points.append((angle, 0))
-
-        return scan
-
-    def flush(self, offset=0.5):
-        pass
 
 
 """ Objects class """

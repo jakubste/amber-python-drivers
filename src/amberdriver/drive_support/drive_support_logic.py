@@ -222,7 +222,6 @@ class DistanceLimiter(object):
                 new_radius = compute_new_radius(speeds, scan)
                 if abs(speeds.radius - new_radius) > 0.0:
                     change_radius(speeds, new_radius)
-                    speeds.compute_other_speed()
             limit_speed(speeds, scan)
             current_timestamp = time.time()
             apply_factor(speeds, logic.compute_data_trust(scan.timestamp / 1000.0, current_timestamp))
@@ -253,6 +252,7 @@ def apply_factor(speeds, factor):
         speeds.speed_front_right *= factor
         speeds.speed_rear_left *= factor
         speeds.speed_rear_right *= factor
+        speeds.compute_other_speed()
 
 
 def get_min_distance(speeds, scan):
@@ -300,6 +300,7 @@ def avoid(speeds, scan):
         else:
             speeds.speed_front_right = -speeds.speed_front_left
             speeds.speed_rear_right = -speeds.speed_rear_left
+        speeds.compute_other_speed()
 
 
 def limit_speed(speeds, scan):
@@ -315,7 +316,7 @@ def limit_speed(speeds, scan):
             if min_distance < SOFT_DISTANCE_LIMIT:
                 max_speed = compute_max_speed(MAX_SPEED, min_distance, SOFT_DISTANCE_LIMIT, HARD_DISTANCE_LIMIT)
                 reduce_speed(speeds, max_speed)
-                speeds.compute_other_speed()
+        speeds.compute_other_speed()
 
 
 def change_radius(speeds, radius):
@@ -352,21 +353,21 @@ def change_radius(speeds, radius):
             # rotate in right
             speeds.speed_front_right = -speeds.speed_front_left
             speeds.speed_rear_right = -speeds.speed_rear_left
+    speeds.compute_other_speed()
 
 
 def reduce_speed(speeds, speed):
-    max_speed = max(abs(speeds.speed_front_left), abs(speeds.speed_front_right),
-                    abs(speeds.speed_rear_left), abs(speeds.speed_rear_right))
     if abs(speeds.linear_speed) > 0.0:
         reduce_factor = 1.0
         if abs(speeds.linear_speed) > speed:
             reduce_factor = speed / abs(speeds.linear_speed)
-        elif max_speed > (1.2 * speed):
-            reduce_factor = (1.2 * speed) / max_speed
+        elif speeds.linear_speed > (1.2 * speed):
+            reduce_factor = (1.2 * speed) / speeds.linear_speed
         speeds.speed_front_left *= reduce_factor
         speeds.speed_front_right *= reduce_factor
         speeds.speed_rear_left *= reduce_factor
         speeds.speed_rear_right *= reduce_factor
+        speeds.compute_other_speed()
 
 
 def change_angle(speeds, angle):
@@ -378,6 +379,7 @@ def change_angle(speeds, angle):
     speeds.speed_rear_left = speeds.speed_rear_left * new_left / speeds.speed_left
     speeds.speed_front_right = speeds.speed_front_right * new_right / speeds.speed_right
     speeds.speed_rear_right = speeds.speed_rear_right * new_right / speeds.speed_right
+    speeds.compute_other_speed()
 
 
 def compute_factor_due_to_motion(motion):

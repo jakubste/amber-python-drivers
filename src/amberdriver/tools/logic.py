@@ -97,7 +97,7 @@ class ScanAnalyzer(object):
     def __call__(self, scan):
         # units are mm and deg
         points = scan.get_points()
-        convert_angles_to_radians(points)
+        points = convert_angles_to_radians(points)
         return Scan(points)
 
 

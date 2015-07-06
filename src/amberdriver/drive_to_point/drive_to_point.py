@@ -187,8 +187,9 @@ class DriveToPoint(object):
 
                     if drive_distance > scan_distance:
                         coming_out_from_local_minimum = True
-                        temporary_target = DriveToPoint.__find_temporary_target(scan, scan_distance, drive_angle)
-                        self.__logger.warn('Setup temporary target: %s', str(target))
+                        temporary_target = DriveToPoint.__find_temporary_target(scan, scan_distance, drive_angle,
+                                                                                location, target)
+                        self.__logger.warn('Setup temporary target: %s', str(temporary_target))
                         self.__stop()
                     else:
                         self.__send_commands(drive_angle, drive_distance)
@@ -228,15 +229,18 @@ class DriveToPoint(object):
             return False
 
     @staticmethod
-    def __find_temporary_target(scan, scan_distance, drive_angle):
-        best_distance = scan_distance
-        best_angle = drive_angle
+    def __find_temporary_target(scan, scan_distance, drive_angle, location, current_target):
+        best_current_temporary_distance = None
+        best_temporary_x, best_temporary_y = 0.0, 0.0
         for angle, distance in sorted(scan.points, key=lambda (a, _): abs(a - drive_angle)):
-            if distance > best_distance:
-                best_distance = distance
-                best_angle = angle
-        x, y = logic.convert_polar_to_grid(best_distance - ROBO_WIDTH, best_angle)
-        return x, y, ROBO_WIDTH * 0.7
+            temporary_x, temporary_y = logic.convert_polar_to_grid(distance - ROBO_WIDTH, angle + location.angle)
+            temporary_x, temporary_y = temporary_x / 1000.0 + location.x, temporary_y / 1000.0 + location.y
+            current_temporary_distance = math.sqrt(math.pow(current_target[0] - temporary_x, 2.0) +
+                                                   math.pow(current_target[1] - temporary_y, 2.0))
+            if best_current_temporary_distance is None or current_temporary_distance < best_current_temporary_distance:
+                best_temporary_x, best_temporary_y = temporary_x, temporary_y
+                best_current_temporary_distance = current_temporary_distance
+        return best_temporary_x, best_temporary_y, ROBO_WIDTH * 0.7 / 1000.0
 
     @staticmethod
     def __compute_drive_angle_distance(location, target):

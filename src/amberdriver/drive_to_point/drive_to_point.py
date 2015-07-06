@@ -6,7 +6,9 @@ import math
 
 import traceback
 import os
+
 from ambercommon.common import runtime
+
 from amberclient.common.listener import Listener
 
 from amberdriver.drive_support import drive_support_logic
@@ -164,7 +166,7 @@ class DriveToPoint(object):
         while not DriveToPoint.target_reached(location, target) and \
                 self.__driving_allowed and self.__is_active and \
                 not self.__next_targets_timestamp > next_targets_timestamp and \
-                                start_time + MAXIMUM_TIME_DRIVE_TO < time.time():
+                                start_time + MAXIMUM_TIME_DRIVE_TO > time.time():
             if coming_out_from_local_minimum:
                 if temporary_target is not None and not DriveToPoint.target_reached(location, temporary_target):
                     drive_angle, drive_distance = DriveToPoint.__compute_drive_angle_distance(location,
@@ -174,6 +176,7 @@ class DriveToPoint(object):
                 else:
                     coming_out_from_local_minimum = False
                     temporary_target = None
+                    self.__logger.warn('Temporary target reached!')
                     self.__stop()
             else:
                 drive_angle, drive_distance = DriveToPoint.__compute_drive_angle_distance(location, target)
@@ -185,6 +188,7 @@ class DriveToPoint(object):
                     if drive_distance > scan_distance:
                         coming_out_from_local_minimum = True
                         temporary_target = DriveToPoint.__find_temporary_target(scan, scan_distance, drive_angle)
+                        self.__logger.warn('Setup temporary target: %s', str(target))
                         self.__stop()
                     else:
                         self.__send_commands(drive_angle, drive_distance)
@@ -192,7 +196,7 @@ class DriveToPoint(object):
             time.sleep(0.07)
             location = self.__locator.get_location()
 
-        if start_time + MAXIMUM_TIME_DRIVE_TO > time.time():
+        if start_time + MAXIMUM_TIME_DRIVE_TO < time.time():
             self.__logger.warn('Target %s not reachable', str(target))
         else:
             self.__logger.info('Target %s reached', str(target))

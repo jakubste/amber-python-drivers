@@ -279,7 +279,15 @@ def get_distance(scan, angle):
 def avoid(speeds, scan):
     min_distance_angle, min_distance = get_min_distance(speeds, scan)
     center_angle = get_angle(speeds.speed_left, speeds.speed_right, ROBO_WIDTH)
-    if min_distance < HARD_DISTANCE_LIMIT + 2.0 * ROBO_WIDTH:
+    if min_distance < HARD_DISTANCE_LIMIT + 0.6 * ROBO_WIDTH:
+        if min_distance_angle > 0.0:
+            speeds.speed_front_left = -speeds.speed_front_right
+            speeds.speed_rear_left = -speeds.speed_rear_right
+        else:
+            speeds.speed_front_right = -speeds.speed_front_left
+            speeds.speed_rear_right = -speeds.speed_rear_left
+        speeds.compute_other_speed()
+    elif min_distance < HARD_DISTANCE_LIMIT + 1.4 * ROBO_WIDTH:
         best_distance = get_distance(scan, center_angle)
         best_angle = center_angle
         best_diff_angle = abs(center_angle - min_distance_angle)
@@ -293,14 +301,6 @@ def avoid(speeds, scan):
         if speeds.speed_left * speeds.speed_right > 0.0:
             change_angle(speeds, best_angle)
             speeds.compute_other_speed()
-    elif min_distance < HARD_DISTANCE_LIMIT + ROBO_WIDTH:
-        if min_distance_angle > 0.0:
-            speeds.speed_front_left = -speeds.speed_front_right
-            speeds.speed_rear_left = -speeds.speed_rear_right
-        else:
-            speeds.speed_front_right = -speeds.speed_front_left
-            speeds.speed_rear_right = -speeds.speed_rear_left
-        speeds.compute_other_speed()
 
 
 def limit_speed(speeds, scan):

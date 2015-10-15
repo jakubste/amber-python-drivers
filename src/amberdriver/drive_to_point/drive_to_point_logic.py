@@ -1,3 +1,5 @@
+from __future__ import division
+
 import math
 import time
 
@@ -26,11 +28,37 @@ def normalize_angle(angle):
 """ Mechanism """
 
 
+def find_local_minima_func(points):
+    prev_distance = None
+    minimum_distance = None
+    minimum_angle = None
+    minimas = []
+    points = filter(lambda (a, d): 50.0 < d < 5000.0, points)
+    for angle, distance in sorted(points, key=lambda (a, d): a):
+        if prev_distance is None:
+            prev_distance = distance
+        else:
+            if prev_distance < distance:
+                if minimum_angle is not None and minimum_distance is not None:
+                    minimas.append((minimum_angle, minimum_distance))
+                    minimum_angle = None
+                    minimum_distance = None
+            elif prev_distance > distance:
+                minimum_angle = angle
+                minimum_distance = distance
+            prev_distance = distance
+    return minimas
+
+
+def find_local_minima(points):
+    return find_local_minima_func(find_local_minima_func(points))
+
+
 class Locator(object):
     def __init__(self):
         self.__timestamp, self.__last_update_ts = 0.0, 0.0
         self.__relative_x, self.__relative_y, self.__relative_angle = 0.0, 0.0, 0.0
-        self.__absolute_x, self.__absolute_y, self.__absolute_angle = 0.0, 0.0, 0.0
+        self.__absolute_x, self.__absolute_y, self.__absolute_angle = None, None, None
         self.__absolute_probability = 0.0
 
     def __get_delta_timestamp(self):
@@ -43,6 +71,10 @@ class Locator(object):
         self.__last_update_ts = time.time()
         x, y, probability, angle, _ = location
         if x is None or y is None or probability is None or angle is None:
+            return
+        if (self.__absolute_x is not None and abs(x - self.__absolute_x) > 0.25) or \
+                (self.__absolute_y is not None and abs(y - self.__absolute_y) > 0.25) or \
+                (self.__absolute_angle is not None and abs(angle - self.__absolute_angle) > 0.2617993877991494):
             return
         angle = normalize_angle(angle)
         self.__absolute_x, self.__absolute_y, self.__absolute_angle = x, y, angle

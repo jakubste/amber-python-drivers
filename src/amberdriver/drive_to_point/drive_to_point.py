@@ -7,6 +7,7 @@ import math
 import traceback
 import os
 from ambercommon.common import runtime
+
 from amberclient.common.listener import Listener
 
 from amberdriver.drive_support import drive_support_logic
@@ -170,7 +171,7 @@ class DriveToPoint(object):
                 scan_distance = drive_support_logic.get_distance(scan, drive_angle)
 
                 if drive_distance > scan_distance:
-                    temporary_target = DriveToPoint.__find_temporary_target(scan, scan_distance, drive_angle,
+                    temporary_target = DriveToPoint.__find_temporary_target(scan, drive_distance, drive_angle,
                                                                             location, target)
                     self.__logger.warn('Try to drive to temporary target: %s', str(temporary_target))
                     drive_angle, drive_distance = DriveToPoint.__compute_drive_angle_distance(location,
@@ -217,24 +218,50 @@ class DriveToPoint(object):
             return False
 
     @staticmethod
-    def __find_temporary_target(scan, scan_distance, drive_angle, location, current_target):
+    def __find_temporary_target(scan, drive_distance, drive_angle, location, current_target):
         best_current_temporary_distance = None
-        best_temporary_x, best_temporary_y = 0.0, 0.0
-        best_distance = math.sqrt(math.pow(current_target[0] - location.x, 2.0) +
-                                  math.pow(current_target[1] - location.y, 2.0))
+        best_temporary_x, best_temporary_y = None, None
         for angle, distance in sorted(scan.points, key=lambda (a, _): a):
-            temporary_x, temporary_y = logic.convert_polar_to_grid(distance - 1.5 * ROBO_WIDTH,
-                                                                   angle + location.angle)
-            temporary_x, temporary_y = temporary_x / 1000.0 + location.x, temporary_y / 1000.0 + location.y
-            current_temporary_distance = math.sqrt(math.pow(current_target[0] - temporary_x, 2.0) +
-                                                   math.pow(current_target[1] - temporary_y, 2.0))
-            if (best_current_temporary_distance is None or
-                        current_temporary_distance < best_current_temporary_distance) and \
-                            distance > best_distance:
-                best_temporary_x, best_temporary_y = temporary_x, temporary_y
-                best_current_temporary_distance = current_temporary_distance
-                best_distance = distance
-        return best_temporary_x, best_temporary_y, ROBO_WIDTH * 1.3 / 1000.0
+            if distance > drive_distance:
+                for _d in logic.drange(ROBO_WIDTH, distance, 100.0):
+                    temporary_x, temporary_y = logic.convert_polar_to_grid(_d - 1.5 * ROBO_WIDTH,
+                                                                           angle + location.angle)
+                    if DriveToPoint.__check_temporary_target(scan, (temporary_x, temporary_y)):
+                        temporary_x, temporary_y = temporary_x / 1000.0 + location.x, temporary_y / 1000.0 + location.y
+                        current_temporary_distance = math.sqrt(math.pow(current_target[0] - temporary_x, 2.0) +
+                                                               math.pow(current_target[1] - temporary_y, 2.0))
+                        condition = abs(temporary_x - location.x) > abs(current_target[0] - location.x) or \
+                                    abs(temporary_y - location.y) > abs(current_target[1] - location.y)
+                        if (best_current_temporary_distance is None or
+                                    current_temporary_distance < best_current_temporary_distance) and \
+                                condition:
+                            best_temporary_x, best_temporary_y = temporary_x, temporary_y
+                            best_current_temporary_distance = current_temporary_distance
+            if best_temporary_x is not None and best_temporary_y is not None:
+                return best_temporary_x, best_temporary_y, ROBO_WIDTH * 1.3 / 1000.0
+            return None
+
+    @staticmethod
+    def __check_temporary_target(scan, point):
+        for alpha in logic.drange(0, 1.5707963267948966, 0.17453292519943295):
+            x, y = logic.convert_polar_to_grid(ROBO_WIDTH * 0.35, alpha)
+            _a, _d = logic.convert_grid_to_polar(x + point[0], y + point[1])
+            s_d = drive_support_logic.get_distance(scan, _a)
+            if 100.0 < s_d < _d:
+                return False
+            _a, _d = logic.convert_grid_to_polar(-x + point[0], y + point[1])
+            s_d = drive_support_logic.get_distance(scan, _a)
+            if 100.0 < s_d < _d:
+                return False
+            _a, _d = logic.convert_grid_to_polar(x + point[0], -y + point[1])
+            s_d = drive_support_logic.get_distance(scan, _a)
+            if 100.0 < s_d < _d:
+                return False
+            _a, _d = logic.convert_grid_to_polar(-x + point[0], -y + point[1])
+            s_d = drive_support_logic.get_distance(scan, _a)
+            if 100.0 < s_d < _d:
+                return False
+        return True
 
     @staticmethod
     def __compute_drive_angle_distance(location, target):

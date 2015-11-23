@@ -2,6 +2,6 @@ protobuf==2.5.0
 bitstring
 pyserial
 gprof2dot
-amber-python-clients
-amber-python-common
+git+git://github.com/project-capo/amber-python-clients
+git+git://github.com/project-capo/amber-python-common
 mock

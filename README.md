@@ -25,13 +25,7 @@ How to use (PyPi)
 
 Add to `requirements.txt`
 
-    amber-python-drivers
-
-You can install it by python-installer
-
-    pip install amber-python-drivers
-
-Package available at https://pypi.python.org/pypi/amber-python-drivers
+    -e git+git://github.com/project-capo/amber-python-drivers#egg=amber-python-drivers
 
 How to contribute
 -----------------

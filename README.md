@@ -4,8 +4,11 @@ amber-python-drivers
 [![Build Status](https://travis-ci.org/project-capo/amber-python-drivers.svg?branch=master)](https://travis-ci.org/project-capo/amber-python-drivers)
 [![Code Health](https://landscape.io/github/project-capo/amber-python-drivers/master/landscape.svg?style=flat)](https://landscape.io/github/project-capo/amber-python-drivers/master)
 [![Codacy Badge](https://www.codacy.com/project/badge/d90b929be42e4593a4ec6bfcc811cd44?style=flat)](https://www.codacy.com/public/pawel/amber-python-drivers)
-[![Code Climate](https://codeclimate.com/github/project-capo/amber-python-drivers/badges/gpa.svg)](https://codeclimate.com/github/project-capo/amber-python-drivers)
 [![Coverage Status](https://coveralls.io/repos/project-capo/amber-python-drivers/badge.svg)](https://coveralls.io/r/project-capo/amber-python-drivers)
+
+[![Code Climate](https://codeclimate.com/github/project-capo/amber-python-drivers/badges/gpa.svg)](https://codeclimate.com/github/project-capo/amber-python-drivers)
+[![Test Coverage](https://codeclimate.com/github/project-capo/amber-python-drivers/badges/coverage.svg)](https://codeclimate.com/github/project-capo/amber-python-drivers/coverage)
+[![Issue Count](https://codeclimate.com/github/project-capo/amber-python-drivers/badges/issue_count.svg)](https://codeclimate.com/github/project-capo/amber-python-drivers)
 
 Requirements
 ------------

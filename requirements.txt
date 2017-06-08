@@ -3,5 +3,5 @@ bitstring
 pyserial
 gprof2dot
 https://github.com/project-capo/amber-python-common/zipball/master
-https://github.com/project-capo/amber-python-clients/archive/master.zip#egg=amber-python-clients
+https://github.com/project-capo/amber-python-clients/zipball/master
 mock

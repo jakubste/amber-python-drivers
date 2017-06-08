@@ -10,7 +10,7 @@ except ImportError:
 
 with open('requirements.txt') as f:
     required = f.read().splitlines()
-    required = [ req.split('#egg=')[1] if '#' in req else req for req in required ]
+#    required = [ req.split('#egg=')[1] if '#' in req else req for req in required ]
 
 setup(
     name='amber-python-drivers',

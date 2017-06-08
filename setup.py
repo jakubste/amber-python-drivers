@@ -12,7 +12,7 @@ with open('requirements.txt') as f:
     required = f.read().splitlines()
 #    required = [ req.split('#egg=')[1] if '#' in req else req for req in required ]
 
-sys.stderr.write(required)
+sys.stderr.write(str(required))
 
 setup(
     name='amber-python-drivers',
